@@ -1,0 +1,5 @@
+{
+  "name": "GrantFinder AI",
+  "description": "An AI-powered web application to help individuals and businesses discover and connect with relevant grants and funding opportunities. The AI proactively searches for new sources based on the user's profile.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,168 @@
+
+import React, { useState, useEffect } from 'react';
+import { GrantOpportunity, ChecklistItem, FundingProfile, Document } from '../types';
+import { getChecklist, saveChecklist } from '../services/checklistService';
+import { getDocuments } from '../services/documentService';
+import { Plus, Trash2, Paperclip, FileText, X } from 'lucide-react';
+
+interface ChecklistProps {
+  grant: GrantOpportunity;
+  profile: FundingProfile;
+}
+
+const Checklist: React.FC<ChecklistProps> = ({ grant, profile }) => {
+  const [items, setItems] = useState<ChecklistItem[]>([]);
+  const [newItemText, setNewItemText] = useState('');
+  const [attachingToItemId, setAttachingToItemId] = useState<number | null>(null);
+  const [availableDocs, setAvailableDocs] = useState<Document[]>([]);
+
+  useEffect(() => {
+    setItems(getChecklist(grant));
+    setAttachingToItemId(null); // Reset attachment state when grant changes
+  }, [grant]);
+
+  const updateAndSave = (updatedItems: ChecklistItem[]) => {
+    setItems(updatedItems);
+    saveChecklist(grant, updatedItems);
+  };
+
+  const handleAddItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newItemText.trim()) return;
+    const newItem: ChecklistItem = {
+      id: Date.now(),
+      text: newItemText.trim(),
+      completed: false,
+    };
+    updateAndSave([...items, newItem]);
+    setNewItemText('');
+  };
+
+  const handleToggleItem = (id: number) => {
+    const updatedItems = items.map(item =>
+      item.id === id ? { ...item, completed: !item.completed } : item
+    );
+    updateAndSave(updatedItems);
+  };
+
+  const handleDeleteItem = (id: number) => {
+    const updatedItems = items.filter(item => item.id !== id);
+    updateAndSave(updatedItems);
+  };
+
+  const handleOpenAttachMenu = (itemId: number) => {
+    setAvailableDocs(getDocuments(profile.id));
+    setAttachingToItemId(itemId);
+  };
+
+  const handleAttachDoc = (itemId: number, doc: Document) => {
+    const updatedItems = items.map(item =>
+      item.id === itemId ? { ...item, documentId: doc.id, documentName: doc.name } : item
+    );
+    updateAndSave(updatedItems);
+    setAttachingToItemId(null);
+  };
+
+  const handleDetachDoc = (itemId: number) => {
+    const updatedItems = items.map(item => {
+      if (item.id === itemId) {
+        const { documentId, documentName, ...rest } = item;
+        return rest;
+      }
+      return item;
+    });
+    updateAndSave(updatedItems);
+  };
+
+  return (
+    <div className="p-6 border-t border-gray-200">
+      <h3 className="text-lg font-semibold text-gray-800 mb-4">
+        Application Checklist
+      </h3>
+      <form onSubmit={handleAddItem} className="flex gap-2 mb-4">
+        <input
+          type="text"
+          value={newItemText}
+          onChange={(e) => setNewItemText(e.target.value)}
+          placeholder="Add a new task (e.g., 'Prepare budget')"
+          className="flex-grow px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary text-sm"
+          aria-label="New checklist item"
+        />
+        <button
+          type="submit"
+          className="flex-shrink-0 p-2 bg-primary text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+          disabled={!newItemText.trim()}
+          aria-label="Add checklist item"
+        >
+          <Plus size={20} />
+        </button>
+      </form>
+      <ul className="space-y-2 max-h-48 overflow-y-auto pr-2">
+        {items.length > 0 ? (
+          items.map(item => (
+            <li
+              key={item.id}
+              className="flex items-center justify-between p-2 rounded-md group transition-colors hover:bg-gray-50"
+            >
+              <label className="flex items-center flex-grow cursor-pointer mr-2">
+                <input
+                  type="checkbox"
+                  checked={item.completed}
+                  onChange={() => handleToggleItem(item.id)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary mr-3 cursor-pointer"
+                />
+                <span className={`text-sm text-gray-700 ${item.completed ? 'line-through text-gray-500' : ''}`}>
+                  {item.text}
+                </span>
+              </label>
+
+              <div className="flex items-center gap-1 relative flex-shrink-0">
+                {item.documentName ? (
+                    <div className="flex items-center gap-1 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+                        <FileText size={12} className="flex-shrink-0" />
+                        <span className="max-w-[120px] truncate" title={item.documentName}>{item.documentName}</span>
+                        <button onClick={() => handleDetachDoc(item.id)} className="ml-1 text-gray-500 hover:text-black rounded-full"><X size={14} /></button>
+                    </div>
+                ) : (
+                  <button onClick={() => handleOpenAttachMenu(item.id)} className="p-1 text-gray-400 hover:text-primary rounded-full opacity-0 group-hover:opacity-100 transition-opacity" aria-label="Attach document">
+                      <Paperclip size={16} />
+                  </button>
+                )}
+
+                {attachingToItemId === item.id && (
+                    <div className="absolute right-0 top-8 z-20 bg-white shadow-lg rounded-md border w-56">
+                       <div className="p-2">
+                          <h4 className="text-xs font-bold text-gray-600 px-1 pb-1 mb-1 border-b">Attach a document</h4>
+                          {availableDocs.length > 0 ? (
+                              <ul className="mt-1 max-h-32 overflow-y-auto">
+                                  {availableDocs.map(doc => (
+                                      <li key={doc.id} onClick={() => handleAttachDoc(item.id, doc)} className="text-sm p-1.5 hover:bg-gray-100 rounded cursor-pointer truncate">{doc.name}</li>
+                                  ))}
+                              </ul>
+                          ) : (
+                              <p className="text-xs text-gray-500 p-2 text-center">No documents in library.</p>
+                          )}
+                       </div>
+                       <button onClick={() => setAttachingToItemId(null)} className="w-full text-center text-xs text-gray-500 hover:text-black py-1 border-t bg-gray-50 rounded-b-md">Cancel</button>
+                    </div>
+                )}
+                
+                <button
+                  onClick={() => handleDeleteItem(item.id)}
+                  className="p-1 text-gray-400 hover:text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label={`Delete item: ${item.text}`}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </li>
+          ))
+        ) : (
+          <p className="text-sm text-gray-500 text-center py-4">No checklist items yet. Add one to get started!</p>
+        )}
+      </ul>
+    </div>
+  );
+};
+
+export default Checklist;
