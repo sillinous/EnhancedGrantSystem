@@ -91,6 +91,14 @@ export interface Expense {
     date: string;
 }
 
+export interface BudgetItem {
+  id: number;
+  grantId: string;
+  description: string;
+  amount: number;
+  justification: string;
+}
+
 export interface LifecycleInsights {
   keyActivities: string[];
   typicalTimeline: string;
@@ -101,6 +109,38 @@ export interface ApplicationReview {
   overallScore: 'Strong Contender' | 'Promising' | 'Needs Revision';
   strengths: string[];
   recommendations: string[];
+  generatedAt: string;
+}
+
+export interface RedTeamReview {
+  overallRisk: 'High' | 'Medium' | 'Low';
+  vulnerabilities: string[];
+  probingQuestions: string[];
+  generatedAt: string;
+}
+
+export interface FunderPersona {
+    funderName: string;
+    coreMission: string;
+    keyPriorities: string[];
+    communicationStyle: string;
+    strategicAdvice: string;
+    generatedAt: string;
+}
+
+export interface SuccessPatternAnalysis {
+    commonThemes: string[];
+    fundedProjectTypes: string[];
+    fundingRangeInsights: string;
+    keywordPatterns: string[];
+    strategicRecommendations: string;
+    generatedAt: string;
+}
+
+export interface DifferentiationAnalysis {
+  innovativeAngles: string[];
+  alternativeMetrics: string[];
+  partnershipSuggestions: string[];
   generatedAt: string;
 }
 

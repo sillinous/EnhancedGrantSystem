@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse, Chat, Type } from "@google/genai";
-import { FundingProfile, GrantOpportunity, ChatMessage, EligibilityReport, LifecycleStage, LifecycleInsights, GrantDraft, ApplicationReview } from '../types';
+import { FundingProfile, GrantOpportunity, ChatMessage, EligibilityReport, LifecycleStage, LifecycleInsights, GrantDraft, ApplicationReview, RedTeamReview, BudgetItem, FunderPersona, SuccessPatternAnalysis, DifferentiationAnalysis } from '../types';
 
 if (!process.env.API_KEY) {
   throw new Error("API_KEY environment variable not set");
@@ -206,6 +206,175 @@ export const getLifecycleInsights = async (grant: GrantOpportunity, stage: Lifec
   return parseJsonFromMarkdown(response.text);
 };
 
+export const analyzeFunderPersona = async (grant: GrantOpportunity): Promise<FunderPersona> => {
+    const prompt = `
+    You are a world-class grant strategy consultant. Your task is to perform a deep analysis of the funding organization behind a specific grant to create a "Funder Persona". This will give the applicant a strategic edge.
+
+    **Core Directives:**
+    1.  **Research Deeply**: Use your search tool to visit the provided Grant URL (${grant.url}) and navigate the funder's website. Go beyond the grant description. Look for their "About Us," "Mission," "Portfolio/Past Grantees," and "News/Press" sections.
+    2.  **Synthesize Findings**: Based on your research, extract the following key intelligence points.
+    3.  **Format Output**: Return your complete analysis as a single, valid JSON object that strictly adheres to the provided schema. Do not invent information; if a specific piece of information cannot be found, state that clearly in the relevant field.
+
+    **Grant Opportunity:**
+    - Name: ${grant.name}
+    - URL: ${grant.url}
+  `;
+
+  const response = await ai.models.generateContent({
+    model: searchModel,
+    contents: prompt,
+    config: {
+      tools: [{ googleSearch: {} }],
+      temperature: 0.2,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          funderName: {
+            type: Type.STRING,
+            description: "The official name of the funding organization."
+          },
+          coreMission: {
+            type: Type.STRING,
+            description: "A concise summary of the funder's primary mission and purpose."
+          },
+          keyPriorities: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "A list of the main areas, themes, or types of projects the funder consistently supports, based on their portfolio and language."
+          },
+          communicationStyle: {
+            type: Type.STRING,
+            description: "A description of the funder's tone and language (e.g., 'Formal and academic,' 'Innovative and disruptive,' 'Community-focused and grassroots')."
+          },
+          strategicAdvice: {
+            type: Type.STRING,
+            description: "Actionable advice for the applicant on how to tailor their proposal's tone, focus, and language to align perfectly with this funder's persona."
+          }
+        },
+        required: ["funderName", "coreMission", "keyPriorities", "communicationStyle", "strategicAdvice"]
+      }
+    }
+  });
+
+  const personaData = parseJsonFromMarkdown(response.text);
+  return { ...personaData, generatedAt: new Date().toISOString() };
+};
+
+export const analyzeSuccessPatterns = async (grant: GrantOpportunity): Promise<SuccessPatternAnalysis> => {
+  const prompt = `
+    You are an expert grant analyst. Your task is to analyze the success patterns of a funding organization by researching their previously funded projects. This provides a data-driven blueprint for what a winning proposal looks like.
+
+    **Core Directives:**
+    1.  **Identify the Funder**: From the Grant URL (${grant.url}), identify the primary funding organization.
+    2.  **Research Past Winners**: Use your search tool to find examples of projects, companies, or individuals previously funded by this organization. Look for press releases, annual reports, or "Our Portfolio" sections on their website.
+    3.  **Identify Patterns**: Analyze the information you find to identify recurring patterns. What do the winners have in common?
+    4.  **Synthesize and Format**: Consolidate your findings and return them ONLY as a single, valid JSON object that strictly adheres to the provided schema. Do not invent information; if a specific piece of information cannot be found, state that in the relevant field (e.g., "Public data on specific keywords was not available.").
+
+    **Grant Opportunity to Analyze:**
+    - Name: ${grant.name}
+    - URL: ${grant.url}
+  `;
+
+  const response = await ai.models.generateContent({
+    model: searchModel,
+    contents: prompt,
+    config: {
+      tools: [{ googleSearch: {} }],
+      temperature: 0.2,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          commonThemes: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "A list of the most common themes or subject areas that appear in funded projects (e.g., 'Youth Education', 'Water Conservation', 'AI for Social Good')."
+          },
+          fundedProjectTypes: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "The typical types of initiatives that receive funding (e.g., 'Scientific Research', 'Community Outreach Programs', 'Technology Development', 'Documentary Films')."
+          },
+          fundingRangeInsights: {
+            type: Type.STRING,
+            description: "An insight into the typical size of grants awarded, based on announcements. (e.g., 'Awards are frequently in the $25,000 - $75,000 range, with larger amounts reserved for established institutions.')."
+          },
+          keywordPatterns: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "A list of specific keywords or phrases that appear frequently in the descriptions of winning projects (e.g., 'Scalable', 'Data-Driven', 'Community-Led', 'Sustainable')."
+          },
+          strategicRecommendations: {
+            type: Type.STRING,
+            description: "A concise, actionable paragraph advising the applicant on how to leverage these patterns to strengthen their own proposal."
+          }
+        },
+        required: ["commonThemes", "fundedProjectTypes", "fundingRangeInsights", "keywordPatterns", "strategicRecommendations"]
+      }
+    }
+  });
+
+  const analysisData = parseJsonFromMarkdown(response.text);
+  return { ...analysisData, generatedAt: new Date().toISOString() };
+};
+
+export const analyzeDifferentiation = async (grant: GrantOpportunity, drafts: GrantDraft[]): Promise<DifferentiationAnalysis> => {
+  const applicationContent = drafts.map(d => `--- ${d.section} ---\n${d.content}`).join('\n\n');
+
+  const prompt = `
+    You are a highly creative grant strategist and innovation consultant. Your task is to analyze a grant proposal and suggest ways to make it stand out from a competitive field of applicants. Do not critique the existing content for errors; instead, focus entirely on elevating its uniqueness and impact.
+
+    **Core Directives:**
+    1.  **Think Outside the Box**: Based on the grant's goals and the applicant's drafts, brainstorm innovative approaches or angles that other applicants might not consider.
+    2.  **Suggest Novel Metrics**: Propose alternative or supplementary metrics for success that are more impactful or creative than standard measurements.
+    3.  **Identify Strategic Partnerships**: Suggest potential types of organizations or specific entities the applicant could partner with to amplify their project's impact and credibility.
+    4.  **Be Actionable**: Ensure all suggestions are concrete and actionable for the applicant.
+
+    **Grant Opportunity:**
+    - Name: ${grant.name}
+    - Description: ${grant.description}
+
+    **Applicant's Drafts:**
+    ${applicationContent}
+
+    **Your Task:**
+    Return your analysis ONLY as a single, valid JSON object that strictly adheres to the provided schema.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: chatModel,
+    contents: prompt,
+    config: {
+      temperature: 0.8,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          innovativeAngles: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "A list of 2-3 creative or innovative angles to make the project more unique."
+          },
+          alternativeMetrics: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "A list of 2-3 non-obvious or more impactful metrics to measure the project's success."
+          },
+          partnershipSuggestions: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "A list of 2-3 strategic partnership ideas to enhance the project's scope and credibility."
+          }
+        },
+        required: ["innovativeAngles", "alternativeMetrics", "partnershipSuggestions"]
+      }
+    }
+  });
+
+  const analysisData = parseJsonFromMarkdown(response.text);
+  return { ...analysisData, generatedAt: new Date().toISOString() };
+};
 
 export const draftGrantSection = async (profile: FundingProfile, grant: GrantOpportunity, section: string): Promise<string> => {
   const prompt = `
@@ -303,6 +472,103 @@ export const reviewApplication = async (grant: GrantOpportunity, drafts: GrantDr
   
   const reviewData = parseJsonFromMarkdown(response.text);
   return { ...reviewData, generatedAt: new Date().toISOString() };
+};
+
+export const runRedTeamReview = async (grant: GrantOpportunity, drafts: GrantDraft[]): Promise<RedTeamReview> => {
+  const applicationContent = drafts.map(d => `--- ${d.section} ---\n${d.content}`).join('\n\n');
+
+  const prompt = `
+    You are a highly skeptical and critical member of a grant review committee's 'Red Team'. Your sole purpose is to find every potential flaw, logical gap, ambiguity, and weakness in this application before it gets submitted. Do not be encouraging or provide constructive suggestions; your job is to stress-test the proposal by being adversarial.
+
+    **Core Directives:**
+    1.  **Assess Risk**: Based on the vulnerabilities, provide an 'overallRisk' assessment: "High" (major, potentially fatal flaws), "Medium" (significant issues that need addressing), or "Low" (minor issues, but still worth noting).
+    2.  **Identify Vulnerabilities**: List the most significant weaknesses, unspoken assumptions, or logical gaps in the proposal.
+    3.  **Generate Probing Questions**: Create a list of tough, specific questions that a skeptical reviewer would ask during a Q&A or that would be raised in a closed-door review session. These questions should challenge the core assertions of the application.
+    
+    **Grant Opportunity:**
+    - Name: ${grant.name}
+    - Description: ${grant.description}
+
+    **Applicant's Drafts:**
+    ${applicationContent}
+
+    **Your Task:**
+    Return your analysis ONLY as a single, valid JSON object that strictly adheres to the provided schema. Do not include any text outside the JSON object.
+  `;
+  
+  const response = await ai.models.generateContent({
+    model: chatModel,
+    contents: prompt,
+    config: {
+      temperature: 0.6,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          overallRisk: {
+            type: Type.STRING,
+            description: 'The overall risk assessment of the application being rejected due to its flaws (High, Medium, Low).'
+          },
+          vulnerabilities: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "A list of the application's most significant weaknesses and logical gaps."
+          },
+          probingQuestions: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "A list of tough, specific questions a skeptical reviewer would ask."
+          }
+        },
+        required: ["overallRisk", "vulnerabilities", "probingQuestions"]
+      }
+    }
+  });
+  
+  const reviewData = parseJsonFromMarkdown(response.text);
+  return { ...reviewData, generatedAt: new Date().toISOString() };
+};
+
+export const generateBudgetJustification = async (grant: GrantOpportunity, drafts: GrantDraft[], budgetItem: Pick<BudgetItem, 'description' | 'amount'>): Promise<string> => {
+  const relevantDrafts = drafts
+    .filter(d => d.section.toLowerCase().includes('goals') || d.section.toLowerCase().includes('objectives') || d.section.toLowerCase().includes('activities') || d.section.toLowerCase().includes('summary'))
+    .map(d => `--- ${d.section} ---\n${d.content}`)
+    .join('\n\n');
+
+  const prompt = `
+    You are an expert grant writer tasked with creating a compelling 'Budget Narrative'. Your sole focus is to justify a single line item from the project budget.
+
+    **Core Task:**
+    Write a concise, persuasive justification paragraph for the following budget item. Your justification MUST directly connect the expense to the project's stated goals, objectives, or activities as detailed in the provided application drafts. Explain *how* this specific cost contributes to achieving a tangible project outcome.
+
+    **Grant Context:**
+    - Grant Name: ${grant.name}
+    - Grant Description: ${grant.description}
+
+    **Budget Line Item to Justify:**
+    - Item: "${budgetItem.description}"
+    - Amount: $${budgetItem.amount.toLocaleString()}
+
+    **Relevant Application Draft Sections:**
+    ${relevantDrafts.length > 0 ? relevantDrafts : "No specific 'Goals' or 'Objectives' drafts were provided. Base the justification on the overall grant description and the budget item's likely purpose."}
+
+    **Output Requirements:**
+    - Provide ONLY the text of the justification paragraph.
+    - Do not include any introductory phrases like "Here is the justification:" or any markdown formatting.
+    - The tone should be professional, clear, and confident.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: chatModel,
+    contents: prompt,
+    config: {
+      temperature: 0.7,
+      topK: 40,
+      topP: 0.95
+    }
+  });
+
+  return response.text.trim();
 };
 
 export const draftGrantReport = async (profile: FundingProfile, grant: GrantOpportunity, progressNotes: string): Promise<string> => {

@@ -1,7 +1,7 @@
-
-import { ApplicationReview, GrantOpportunity } from '../types';
+import { ApplicationReview, GrantOpportunity, RedTeamReview } from '../types';
 
 const REVIEWS_KEY = 'grantfinder_reviews';
+const RED_TEAM_REVIEWS_KEY = 'grantfinder_redTeamReviews';
 
 // Helper to create a consistent, unique key for a grant.
 const getGrantId = (grant: GrantOpportunity): string => {
@@ -9,6 +9,8 @@ const getGrantId = (grant: GrantOpportunity): string => {
   const safeUrl = grant.url.replace(/[^a-zA-Z0-9]/g, '');
   return `grant_${safeName}_${safeUrl}`.slice(0, 75);
 };
+
+// --- Constructive Application Review ---
 
 const getAllReviews = (): Record<string, ApplicationReview> => {
   try {
@@ -41,4 +43,42 @@ export const saveReview = (grant: GrantOpportunity, review: ApplicationReview): 
   const allReviews = getAllReviews();
   allReviews[grantId] = review;
   saveAllReviews(allReviews);
+};
+
+
+// --- Red Team Review ---
+
+const getAllRedTeamReviews = (): Record<string, RedTeamReview> => {
+  try {
+    const reviewsJson = localStorage.getItem(RED_TEAM_REVIEWS_KEY);
+    return reviewsJson ? JSON.parse(reviewsJson) : {};
+  } catch (error) {
+    console.error("Failed to parse red team reviews from localStorage", error);
+    return {};
+  }
+};
+
+const saveAllRedTeamReviews = (allReviews: Record<string, RedTeamReview>): void => {
+  try {
+    localStorage.setItem(RED_TEAM_REVIEWS_KEY, JSON.stringify(allReviews));
+  } catch (error)
+    {
+    console.error("Failed to save red team reviews to localStorage", error);
+  }
+};
+
+export const getRedTeamReview = (grant: GrantOpportunity): RedTeamReview | null => {
+  if (!grant) return null;
+  const grantId = getGrantId(grant);
+  const allReviews = getAllRedTeamReviews();
+  return allReviews[grantId] || null;
+};
+
+export const saveRedTeamReview = (grant: GrantOpportunity, review: RedTeamReview): void => {
+  if (!grant) return;
+  const grantId = getGrantId(grant);
+  const allReviews = getAllRedTeamReviews();
+  allReviews[grantId] = review;
+  // FIX: Called `saveAllRedTeamReviews` instead of `saveAllReviews` to use the correct serializer and storage key for RedTeamReview objects.
+  saveAllRedTeamReviews(allReviews);
 };

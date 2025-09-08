@@ -75,7 +75,7 @@ const Checklist: React.FC<ChecklistProps> = ({ grant, profile }) => {
   };
 
   return (
-    <div className="p-6 border-t border-gray-200">
+    <div className="animate-fade-in">
       <h3 className="text-lg font-semibold text-gray-800 mb-4">
         Application Checklist
       </h3>
@@ -97,7 +97,7 @@ const Checklist: React.FC<ChecklistProps> = ({ grant, profile }) => {
           <Plus size={20} />
         </button>
       </form>
-      <ul className="space-y-2 max-h-48 overflow-y-auto pr-2">
+      <ul className="space-y-2">
         {items.length > 0 ? (
           items.map(item => (
             <li

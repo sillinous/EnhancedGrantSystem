@@ -1,11 +1,13 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { GrantOpportunity, FundingProfile, GroundingSource, EligibilityReport, GrantStatus, LifecycleStage, LifecycleInsights, User, AppConfig, ActivityLog } from '../types';
+import { GrantOpportunity, FundingProfile, GroundingSource, EligibilityReport, GrantStatus, LifecycleStage, LifecycleInsights, User, AppConfig, ActivityLog, FunderPersona, SuccessPatternAnalysis } from '../types';
 import * as draftService from '../services/draftService';
 import * as usageService from '../services/usageService';
 import * as activityService from '../services/activityService';
+import * as personaService from '../services/personaService';
+import * as successPatternService from '../services/successPatternService';
 import { getConfig } from '../services/configService';
-import { checkEligibility, getLifecycleInsights } from '../services/geminiService';
+import { checkEligibility, getLifecycleInsights, analyzeFunderPersona, analyzeSuccessPatterns } from '../services/geminiService';
 import { createCalendarFile } from '../services/calendarService';
 import ChatAssistant from './ChatAssistant';
 import Checklist from './Checklist';
@@ -19,10 +21,13 @@ import GrantLifecycleTracker from './GrantLifecycleTracker';
 import FeatureGuard from './FeatureGuard';
 import ShareButton from './ShareButton';
 import ActivityFeed from './ActivityFeed';
-import { Link, Info, Sparkles, ThumbsUp, AlertTriangle, Lightbulb, ShieldCheck, CalendarClock, ChevronDown, FolderKanban, Columns, CheckSquare, MessageSquare, BookText, FileBarChart2, CalendarPlus, Map, CheckCircle2, Milestone, Star, Award, Target, History } from 'lucide-react';
+import BudgetAssistant from './BudgetAssistant';
+import FunderPersonaAnalysis from './FunderPersonaAnalysis';
+import SuccessPatternAnalysisComponent from './SuccessPatternAnalysis';
+import { Link, Info, Sparkles, ThumbsUp, AlertTriangle, Lightbulb, ShieldCheck, CalendarClock, ChevronDown, FolderKanban, Columns, CheckSquare, MessageSquare, BookText, FileBarChart2, CalendarPlus, Map, CheckCircle2, Milestone, Star, Award, Target, History, Wallet, Briefcase, Bot } from 'lucide-react';
 
 const statusOptions: GrantStatus[] = ['Interested', 'Applying', 'Submitted', 'Awarded', 'Rejected'];
-type DetailTab = 'Lifecycle' | 'Analysis' | 'Checklist' | 'Drafts' | 'Review' | 'Assistant' | 'Reporting' | 'Activity';
+type DetailTab = 'Lifecycle' | 'Funder Persona' | 'Success Patterns' | 'Analysis' | 'Checklist' | 'Drafts' | 'Budget' | 'Review' | 'Assistant' | 'Reporting' | 'Activity';
 
 interface GrantDetailViewProps {
   grant: (GrantOpportunity & { status: GrantStatus }) | null;
@@ -46,6 +51,13 @@ const GrantDetailView: React.FC<GrantDetailViewProps> = ({ grant, profile, onClo
   const [isFetchingInsights, setIsFetchingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const [activityLog, setActivityLog] = useState<ActivityLog[]>([]);
+  const [funderPersona, setFunderPersona] = useState<FunderPersona | null>(null);
+  const [isAnalyzingPersona, setIsAnalyzingPersona] = useState(false);
+  const [personaError, setPersonaError] = useState<string | null>(null);
+  const [successPatternAnalysis, setSuccessPatternAnalysis] = useState<SuccessPatternAnalysis | null>(null);
+  const [isAnalyzingSuccessPatterns, setIsAnalyzingSuccessPatterns] = useState(false);
+  const [successPatternError, setSuccessPatternError] = useState<string | null>(null);
+
 
   const [config] = useState<AppConfig>(getConfig());
   const [usage, setUsage] = useState({ remaining: 0, limit: 5 });
@@ -64,10 +76,18 @@ const GrantDetailView: React.FC<GrantDetailViewProps> = ({ grant, profile, onClo
     setLifecycleInsights(null);
     setIsFetchingInsights(false);
     setInsightsError(null);
+    setFunderPersona(null);
+    setIsAnalyzingPersona(false);
+    setPersonaError(null);
+    setSuccessPatternAnalysis(null);
+    setIsAnalyzingSuccessPatterns(false);
+    setSuccessPatternError(null);
     
     if (grant) {
         setHasDrafts(draftService.getDrafts(grant).length > 0);
         setActivityLog(activityService.getActivitiesForGrant(grant));
+        setFunderPersona(personaService.getPersona(grant));
+        setSuccessPatternAnalysis(successPatternService.getSuccessPatternAnalysis(grant));
     } else {
         setHasDrafts(false);
         setActivityLog([]);
@@ -115,6 +135,46 @@ const GrantDetailView: React.FC<GrantDetailViewProps> = ({ grant, profile, onClo
       setEligibilityError("The AI couldn't complete the analysis. Please try again.");
     } finally {
       setIsCheckingEligibility(false);
+    }
+  };
+
+    const handleAnalyzeFunderPersona = async () => {
+    if (!grant) return;
+
+    logActivity("ran AI Funder Persona Analysis");
+    setIsAnalyzingPersona(true);
+    setPersonaError(null);
+    setFunderPersona(null);
+    setActiveTab('Funder Persona');
+    try {
+      const persona = await analyzeFunderPersona(grant);
+      setFunderPersona(persona);
+      personaService.savePersona(grant, persona);
+    } catch (e) {
+      console.error("Failed to analyze funder persona:", e);
+      setPersonaError("The AI couldn't complete the persona analysis. Please try again.");
+    } finally {
+      setIsAnalyzingPersona(false);
+    }
+  };
+  
+    const handleAnalyzeSuccessPatterns = async () => {
+    if (!grant) return;
+
+    logActivity("ran AI Success Pattern Analysis");
+    setIsAnalyzingSuccessPatterns(true);
+    setSuccessPatternError(null);
+    setSuccessPatternAnalysis(null);
+    setActiveTab('Success Patterns');
+    try {
+      const analysis = await analyzeSuccessPatterns(grant);
+      setSuccessPatternAnalysis(analysis);
+      successPatternService.saveSuccessPatternAnalysis(grant, analysis);
+    } catch (e) {
+      console.error("Failed to analyze success patterns:", e);
+      setSuccessPatternError("The AI couldn't complete the success pattern analysis. Please try again.");
+    } finally {
+      setIsAnalyzingSuccessPatterns(false);
     }
   };
 
@@ -235,9 +295,12 @@ const GrantDetailView: React.FC<GrantDetailViewProps> = ({ grant, profile, onClo
           <div className="p-4 border-b border-gray-200 flex items-center gap-2 overflow-x-auto">
              <TabButton tab="Lifecycle" label="Lifecycle" icon={<Map size={16}/>} />
              {grant.status === 'Awarded' && <TabButton tab="Reporting" label="Reporting" icon={<FileBarChart2 size={16}/>} />}
+             <TabButton tab="Funder Persona" label="Funder Persona" icon={<Briefcase size={16}/>} />
+             <TabButton tab="Success Patterns" label="Success Patterns" icon={<Bot size={16}/>} />
              <TabButton tab="Analysis" label="Analysis" icon={<ShieldCheck size={16}/>} />
              <TabButton tab="Checklist" label="Checklist" icon={<CheckSquare size={16}/>} />
              <TabButton tab="Drafts" label="Drafts" icon={<BookText size={16}/>} />
+             <TabButton tab="Budget" label="Budget" icon={<Wallet size={16}/>} />
              {hasDrafts && grant.status !== 'Awarded' && <TabButton tab="Review" label="Review" icon={<Star size={16}/>} />}
              <TabButton tab="Assistant" label="Assistant" icon={<MessageSquare size={16}/>} />
              {isTeamProject && <TabButton tab="Activity" label="Activity" icon={<History size={16}/>} />}
@@ -273,6 +336,26 @@ const GrantDetailView: React.FC<GrantDetailViewProps> = ({ grant, profile, onClo
                  </div>
             )}
             {activeTab === 'Reporting' && <ReportingManager grant={grant} />}
+            {activeTab === 'Funder Persona' && (
+                <FunderPersonaAnalysis
+                    grant={grant}
+                    user={user}
+                    persona={funderPersona}
+                    isLoading={isAnalyzingPersona}
+                    error={personaError}
+                    onAnalyze={handleAnalyzeFunderPersona}
+                />
+            )}
+            {activeTab === 'Success Patterns' && (
+                <SuccessPatternAnalysisComponent
+                    grant={grant}
+                    user={user}
+                    analysis={successPatternAnalysis}
+                    isLoading={isAnalyzingSuccessPatterns}
+                    error={successPatternError}
+                    onAnalyze={handleAnalyzeSuccessPatterns}
+                />
+            )}
             {activeTab === 'Analysis' && (
               <div className="animate-fade-in">
                 {grant.status !== 'Awarded' && (
@@ -375,6 +458,7 @@ const GrantDetailView: React.FC<GrantDetailViewProps> = ({ grant, profile, onClo
             )}
             {activeTab === 'Checklist' && <Checklist grant={grant} profile={profile} />}
             {activeTab === 'Drafts' && <DraftsManager grant={grant} key={grant.url + draftsUpdated} />}
+            {activeTab === 'Budget' && <BudgetAssistant grant={grant} profile={profile} />}
             {activeTab === 'Review' && <ApplicationReviewer grant={grant} profile={profile} user={user} />}
             {activeTab === 'Assistant' && <ChatAssistant user={user} grant={grant} profile={profile} onSaveDraft={handleSaveDraft} />}
             {activeTab === 'Activity' && <ActivityFeed activityLog={activityLog} />}
