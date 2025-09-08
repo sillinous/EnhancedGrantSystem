@@ -1,4 +1,4 @@
-import { GrantDraft, GrantOpportunity } from '../types';
+import { GrantDraft, GrantOpportunity, Comment } from '../types';
 
 const DRAFTS_KEY = 'grantfinder_drafts';
 
@@ -46,6 +46,8 @@ export const addDraft = (grant: GrantOpportunity, draftData: { section: string; 
     ...draftData,
     createdAt: new Date().toISOString(),
     status: 'Draft',
+    // FIX: Add missing `comments` property to satisfy the GrantDraft type.
+    comments: [],
   };
 
   allDrafts[grantId] = [...grantDrafts, newDraft];

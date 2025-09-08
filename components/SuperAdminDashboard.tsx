@@ -89,7 +89,8 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ user, onLogou
 
     return (
         <div className="min-h-screen bg-gray-50">
-            <Header user={user} onLogout={onLogout} isPublic={false} />
+            {/* FIX: Removed unsupported `isPublic` prop. */}
+            <Header user={user} onLogout={onLogout} />
             <main className="container mx-auto p-4 md:p-8">
                 <h1 className="text-3xl font-bold text-gray-800 mb-6">Super Admin Dashboard</h1>
                 

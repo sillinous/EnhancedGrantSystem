@@ -102,3 +102,16 @@ export const addMemberToTeam = (teamId: number, userId: number) => {
         saveAllTeams(allTeams);
     }
 };
+
+// FIX: Add missing `hasPermission` function.
+export const hasPermission = (userId: number, teamId: number, permission: 'canManageTeam'): boolean => {
+    const role = getUserRoleInTeam(userId, teamId);
+    if (!role) return false;
+
+    if (permission === 'canManageTeam') {
+        // For simplicity, only Admins can manage the team in this mock setup.
+        return role === 'Admin';
+    }
+    // Can be extended for other permissions
+    return false;
+};

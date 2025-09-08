@@ -14,6 +14,8 @@ export interface GrantOpportunity {
   description: string;
   fundingAmount: string;
   url: string;
+  industry: string;
+  deadline: string;
 }
 
 export interface PublicGrant extends GrantOpportunity {
@@ -75,6 +77,8 @@ export interface GrantDraft {
   content: string;
   createdAt: string;
   status: 'Draft' | 'Pending Approval' | 'Approved';
+  comments: Comment[];
+  lockedBy?: { userId: number; username: string };
 }
 
 export interface ReportingRequirement {
@@ -91,6 +95,8 @@ export interface Expense {
     description: string;
     amount: number;
     date: string;
+    budgetItemId?: number;
+    category?: string;
 }
 
 export interface BudgetItem {
@@ -175,23 +181,25 @@ export interface SourcingAgent {
   status: 'Active' | 'Idle';
 }
 
-// --- New Types for Monetization and User Roles ---
+// --- Enterprise & Monetization Types ---
 
 export type Role = 'User' | 'Admin';
-export type TeamRole = 'Admin' | 'Editor' | 'Viewer';
+export type TeamRole = 'Admin' | 'Editor' | 'Viewer' | 'Approver' | 'Stakeholder' | 'Partner';
 
 export interface User {
   id: number;
   username: string;
   role: Role;
-  isSubscribed: boolean; // For subscription model
+  isSubscribed: boolean;
   teamIds: number[];
 }
 
 export type MonetizationModel = 'Free' | 'Subscription' | 'PayPerFeature' | 'UsageBased';
+export type SSOProvider = 'Google' | 'Okta' | 'Azure AD' | 'GitHub' | 'Facebook';
 
 export interface AppConfig {
   monetizationModel: MonetizationModel;
+  enabledSSOProviders: SSOProvider[];
 }
 
 export interface Subscription {
@@ -203,6 +211,7 @@ export interface Subscription {
 
 export interface TeamMember {
     userId: number;
+    // FIX: Changed from `roleId` to `role` to match the actual implementation in `teamService`.
     role: TeamRole;
 }
 
@@ -210,6 +219,18 @@ export interface Team {
     id: number;
     name: string;
     members: TeamMember[];
+    // FIX: Made `customRoles` optional as it is not present in the mock data.
+    customRoles?: CustomRole[];
+    ssoConfig?: {
+      provider: SSOProvider;
+      domain: string;
+    };
+    branding?: BrandingSettings;
+}
+
+export interface BrandingSettings {
+    primaryColor: string;
+    logoUrl: string;
 }
 
 export interface BoilerplateDocument {
@@ -231,4 +252,91 @@ export interface SuperAdminStats {
     totalUsers: number;
     activeSubscriptions: number;
     totalTeams: number;
+}
+
+export interface Comment {
+    id: number;
+    userId: number;
+    username: string;
+    timestamp: string;
+    content: string;
+}
+
+export interface Permissions {
+    canEditProfiles: boolean;
+    canManageDrafts: boolean;
+    canApproveDrafts: boolean;
+    canManageTeam: boolean;
+}
+
+export interface CustomRole {
+    id: number;
+    name: string;
+    permissions: Permissions;
+    isDefault: boolean;
+}
+
+export interface GrantSection {
+    section: string;
+    content: string;
+}
+
+export interface FullProposal {
+    title: string;
+    sections: GrantSection[];
+    generatedAt: string;
+}
+
+export interface KnowledgeBaseDocument {
+    id: number;
+    teamId: number;
+    name: string;
+    content: string;
+    outcome: 'Won' | 'Lost' | 'Informational';
+    uploadedAt: string;
+}
+
+export interface SemanticSearchResult {
+    answer: string;
+    sources: { documentId: number; documentName: string; }[];
+}
+
+export interface LessonsLearnedFinding {
+    theme: string;
+    suggestion: string;
+    supportingExcerpts: string[];
+}
+
+export interface LessonsLearnedReport {
+    summary: string;
+    findings: LessonsLearnedFinding[];
+    generatedAt: string;
+}
+
+export interface FundingTrendReport {
+    sector: string;
+    summary: string;
+    emergingKeywords: string[];
+    shiftingPriorities: string[];
+    newAreasOfFocus: string[];
+    generatedAt: string;
+}
+
+export interface HeatmapData {
+    sector: string;
+    region: string;
+    fundingVolume: number;
+}
+
+export interface ForecastedGrant {
+    name: string;
+    funder: string;
+    estimatedReopening: string; // e.g., "Q4 2024"
+    confidence: 'High' | 'Medium' | 'Low';
+}
+
+export interface PipelineStats {
+    totalPipeline: number;
+    totalAwardedYTD: number;
+    successRate: number;
 }

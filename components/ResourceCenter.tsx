@@ -37,7 +37,8 @@ const ResourceCenter: React.FC = () => {
 
     return (
         <div className="bg-gray-50 min-h-screen">
-            <Header user={null} onLogout={() => {}} isPublic={true} />
+            {/* FIX: Removed unsupported `isPublic` prop. */}
+            <Header user={null} onLogout={() => {}} />
             <main className="container mx-auto p-4 md:p-8">
                 <div className="text-center mb-12">
                     <BookOpen size={40} className="mx-auto text-primary mb-4" />

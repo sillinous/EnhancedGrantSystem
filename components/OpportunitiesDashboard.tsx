@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { FundingProfile, GrantOpportunity, GroundingSource, GrantStatus, User } from '../types';
 import GrantCard from './GrantCard';
 import GrantDetailView from './GrantDetailView';
+import { CheckSquare } from 'lucide-react';
 
 // Helper to create a consistent, unique key for a grant.
 const getGrantId = (grant: GrantOpportunity): string => {
@@ -25,6 +26,9 @@ interface OpportunitiesDashboardProps {
 const OpportunitiesDashboard: React.FC<OpportunitiesDashboardProps> = ({ profile, grants, grantStatuses, onStatusChange, sources, onRefresh, isRefreshing, user }) => {
   const [selectedGrant, setSelectedGrant] = useState<GrantOpportunity | null>(null);
   const [activeFilter, setActiveFilter] = useState<GrantStatus | 'All'>('All');
+  const [isSelectMode, setIsSelectMode] = useState<boolean>(false);
+  const [selectedGrantIds, setSelectedGrantIds] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState<GrantStatus>('Applying');
 
   const grantsWithStatuses = useMemo(() => {
     return grants.map(grant => ({
@@ -39,11 +43,50 @@ const OpportunitiesDashboard: React.FC<OpportunitiesDashboardProps> = ({ profile
   }, [grantsWithStatuses, activeFilter]);
 
   const handleSelectGrant = (grant: GrantOpportunity) => {
+    if (isSelectMode) return;
     setSelectedGrant(grant);
   };
 
   const handleCloseDetail = () => {
     setSelectedGrant(null);
+  };
+
+  const toggleSelectMode = () => {
+    setIsSelectMode(prev => !prev);
+    setSelectedGrantIds(new Set());
+  };
+
+  const handleToggleGrantSelection = (grantId: string) => {
+    setSelectedGrantIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(grantId)) {
+        newSet.delete(grantId);
+      } else {
+        newSet.add(grantId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedGrantIds.size === filteredGrants.length) {
+      setSelectedGrantIds(new Set()); // Deselect all
+    } else {
+      const allVisibleIds = new Set(filteredGrants.map(getGrantId));
+      setSelectedGrantIds(allVisibleIds);
+    }
+  };
+
+  const handleBulkStatusChange = () => {
+    if (selectedGrantIds.size === 0) return;
+    
+    const grantsToUpdate = grantsWithStatuses.filter(g => selectedGrantIds.has(getGrantId(g)));
+    
+    grantsToUpdate.forEach(grant => {
+        onStatusChange(grant, bulkStatus);
+    });
+
+    toggleSelectMode(); // Exit select mode after applying
   };
 
   const RefreshIcon: React.FC<{isRefreshing: boolean}> = ({ isRefreshing }) => (
@@ -60,14 +103,22 @@ const OpportunitiesDashboard: React.FC<OpportunitiesDashboardProps> = ({ profile
       <div className={`w-full lg:w-1/3 transition-all duration-300 ${selectedGrant ? 'hidden lg:block' : 'block'}`}>
         <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-gray-800">Opportunities</h2>
-            <button 
-              onClick={onRefresh}
-              disabled={isRefreshing}
-              className="flex items-center text-sm text-primary hover:text-blue-700 disabled:text-gray-400 disabled:cursor-wait transition-colors"
-            >
-              <RefreshIcon isRefreshing={isRefreshing} />
-              {isRefreshing ? 'Refreshing...' : 'Refresh'}
-            </button>
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={toggleSelectMode}
+                    className="flex items-center text-sm font-medium text-primary hover:bg-primary/10 px-3 py-1.5 rounded-md transition-colors"
+                >
+                    {isSelectMode ? 'Cancel' : <><CheckSquare size={16} className="mr-1.5" /> Bulk Edit</>}
+                </button>
+                <button 
+                  onClick={onRefresh}
+                  disabled={isRefreshing}
+                  className="flex items-center text-sm text-primary hover:text-blue-700 disabled:text-gray-400 disabled:cursor-wait transition-colors"
+                >
+                  <RefreshIcon isRefreshing={isRefreshing} />
+                  {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                </button>
+            </div>
         </div>
         
         <div className="mb-4 overflow-x-auto">
@@ -89,6 +140,21 @@ const OpportunitiesDashboard: React.FC<OpportunitiesDashboardProps> = ({ profile
                 ))}
             </div>
         </div>
+        
+        {isSelectMode && (
+            <div className="mb-4 p-2 border-b">
+                <label className="flex items-center text-sm font-medium text-gray-700 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        onChange={handleSelectAll}
+                        checked={filteredGrants.length > 0 && selectedGrantIds.size === filteredGrants.length}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary mr-2"
+                        aria-label="Select all visible grants"
+                    />
+                    Select All ({selectedGrantIds.size} / {filteredGrants.length})
+                </label>
+            </div>
+        )}
 
         <div className="space-y-4">
           {filteredGrants.length > 0 ? (
@@ -96,8 +162,11 @@ const OpportunitiesDashboard: React.FC<OpportunitiesDashboardProps> = ({ profile
               <GrantCard
                 key={getGrantId(grant)}
                 grant={grant}
-                onSelect={() => handleSelectGrant(grant)}
-                isSelected={selectedGrant ? getGrantId(selectedGrant) === getGrantId(grant) : false}
+                onSelectForDetail={() => handleSelectGrant(grant)}
+                isDetailedView={selectedGrant ? getGrantId(selectedGrant) === getGrantId(grant) : false}
+                isSelectMode={isSelectMode}
+                isBulkSelected={selectedGrantIds.has(getGrantId(grant))}
+                onToggleBulkSelect={() => handleToggleGrantSelection(getGrantId(grant))}
               />
             ))
           ) : (
@@ -123,6 +192,29 @@ const OpportunitiesDashboard: React.FC<OpportunitiesDashboardProps> = ({ profile
             user={user}
         />
       </div>
+      {isSelectMode && selectedGrantIds.size > 0 && (
+          <div className="fixed bottom-0 left-0 right-0 bg-white p-4 shadow-[0_-2px_10px_rgba(0,0,0,0.1)] z-40 animate-slide-in-up">
+              <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <p className="text-sm font-bold text-gray-800">{selectedGrantIds.size} opportunities selected</p>
+                  <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">Change status to:</span>
+                      <select
+                          value={bulkStatus}
+                          onChange={(e) => setBulkStatus(e.target.value as GrantStatus)}
+                          className="appearance-none text-sm font-semibold bg-gray-100 text-gray-800 pl-3 pr-8 py-1.5 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                          {statusFilters.map(status => <option key={status} value={status}>{status}</option>)}
+                      </select>
+                      <button 
+                          onClick={handleBulkStatusChange}
+                          className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition-colors"
+                      >
+                          Apply
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

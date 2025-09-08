@@ -7,7 +7,7 @@ import * as subscriptionService from '../services/subscriptionService';
 import { CheckCircle, Star } from 'lucide-react';
 
 interface PricingPageProps {
-  user: User;
+  user: User | null;
   onSubscriptionSuccess: (user: User) => void;
 }
 
@@ -22,10 +22,15 @@ const PricingPage: React.FC<PricingPageProps> = ({ user, onSubscriptionSuccess }
   };
 
   const handleUpgrade = () => {
+    if (!user) {
+      navigateTo('/login');
+      return;
+    }
     setIsCheckoutOpen(true);
   };
 
   const handleConfirmPayment = () => {
+    if (!user) return;
     setIsProcessing(true);
     // Simulate API call to Stripe and our backend
     setTimeout(() => {
@@ -53,7 +58,8 @@ const PricingPage: React.FC<PricingPageProps> = ({ user, onSubscriptionSuccess }
   return (
     <>
       <div className="bg-gray-50 min-h-screen">
-        <Header user={user} onLogout={() => {}} isPublic={false} />
+        {/* FIX: Removed unsupported `isPublic` prop. */}
+        <Header user={user} onLogout={() => {}} />
         <main className="container mx-auto p-4 md:p-8">
           <div className="max-w-4xl mx-auto text-center">
             <h1 className="text-4xl font-bold text-gray-800">Unlock Your Full Potential</h1>
@@ -78,7 +84,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ user, onSubscriptionSuccess }
               onClick={handleUpgrade}
               className="mt-8 w-full bg-primary text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition-transform hover:scale-105"
             >
-              Upgrade to Pro
+              {user?.isSubscribed ? 'You are on Pro' : 'Upgrade to Pro'}
             </button>
           </div>
         </main>

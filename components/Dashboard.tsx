@@ -78,7 +78,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
     return (
         <div className="min-h-screen bg-gray-50">
-            <Header user={user} onLogout={onLogout} isPublic={false} />
+            {/* FIX: Removed unsupported `isPublic` prop. */}
+            <Header user={user} onLogout={onLogout} />
             <main className="container mx-auto p-4 md:p-8">
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-gray-800">Mission Control</h1>

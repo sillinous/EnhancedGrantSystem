@@ -40,7 +40,8 @@ const CustomerPortal: React.FC<CustomerPortalProps> = ({ user, onSubscriptionCha
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      <Header user={user} onLogout={() => {}} isPublic={false} />
+      {/* FIX: Removed unsupported `isPublic` prop. */}
+      <Header user={user} onLogout={() => {}} />
       <main className="container mx-auto p-4 md:p-8">
         <div className="max-w-2xl mx-auto">
           <h1 className="text-3xl font-bold text-gray-800 mb-8">Account Management</h1>

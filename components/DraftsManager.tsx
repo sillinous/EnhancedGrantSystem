@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GrantOpportunity, GrantDraft, FundingProfile, User, TeamRole } from '../types';
 import * as draftService from '../services/draftService';
 import * as teamService from '../services/teamService';
-import { BookText, Edit, Trash2, Save, X, Send, CheckCircle, RefreshCw } from 'lucide-react';
+import { BookText, Edit, Trash2, Save, X, Send, CheckCircle, RefreshCw, Undo2 } from 'lucide-react';
 
 interface DraftsManagerProps {
   grant: GrantOpportunity;
@@ -44,15 +44,25 @@ const DraftsManager: React.FC<DraftsManagerProps> = ({ grant, profile, user }) =
     }
   }, [editingContent, editingDraftId]);
 
-  const updateDraftAndRefresh = (updatedDraft: GrantDraft) => {
+  const handleStatusChange = (draft: GrantDraft, newStatus: GrantDraft['status']) => {
+      const updatedDraft = { ...draft, status: newStatus };
       draftService.updateDraft(grant, updatedDraft);
       setDrafts(draftService.getDrafts(grant));
   };
 
   const handleStartEditing = (draft: GrantDraft) => {
-    if (draft.status === 'Approved' && userRole !== 'Admin') {
-        alert('This draft is approved and can only be edited by a team admin.');
-        return;
+    const canEdit =
+      userRole === 'Admin' ||
+      userRole === 'Approver' ||
+      (userRole === 'Editor' && draft.status === 'Draft');
+
+    if (!canEdit) {
+      if (userRole === 'Editor' && draft.status !== 'Draft') {
+        alert(`This draft is currently "${draft.status}" and cannot be edited until an approver requests changes.`);
+      } else {
+        alert("You do not have permission to edit this draft in its current state.");
+      }
+      return;
     }
     setEditingDraftId(draft.id);
     setEditingContent(draft.content);
@@ -67,8 +77,11 @@ const DraftsManager: React.FC<DraftsManagerProps> = ({ grant, profile, user }) =
     if (editingDraftId === null) return;
     const draftToUpdate = drafts.find(d => d.id === editingDraftId);
     if (draftToUpdate) {
-      const updatedDraft = { ...draftToUpdate, content: editingContent, status: 'Draft' as const };
-      updateDraftAndRefresh(updatedDraft);
+      // When an editor saves, it goes back to 'Draft' status
+      const newStatus = (userRole === 'Admin' || userRole === 'Approver') ? draftToUpdate.status : 'Draft';
+      const updatedDraft = { ...draftToUpdate, content: editingContent, status: newStatus };
+      draftService.updateDraft(grant, updatedDraft);
+      setDrafts(draftService.getDrafts(grant));
     }
     handleCancelEditing();
   };
@@ -78,11 +91,6 @@ const DraftsManager: React.FC<DraftsManagerProps> = ({ grant, profile, user }) =
         draftService.deleteDraft(grant, draftId);
         setDrafts(draftService.getDrafts(grant));
     }
-  };
-
-  const handleStatusChange = (draft: GrantDraft, newStatus: GrantDraft['status']) => {
-      const updatedDraft = { ...draft, status: newStatus };
-      updateDraftAndRefresh(updatedDraft);
   };
 
   if (drafts.length === 0) {
@@ -131,12 +139,12 @@ const DraftsManager: React.FC<DraftsManagerProps> = ({ grant, profile, user }) =
            )}
            {userRole && editingDraftId !== draft.id && (
                <div className="mt-3 pt-3 border-t flex items-center gap-2">
-                   {userRole !== 'Viewer' && draft.status === 'Draft' && (
+                   {(userRole === 'Editor') && draft.status === 'Draft' && (
                        <button onClick={() => handleStatusChange(draft, 'Pending Approval')} className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors px-3 py-1.5 rounded-md border border-primary/30">
-                           <Send size={14} /> Submit for Review
+                           <Send size={14} /> Submit for Approval
                        </button>
                    )}
-                   {userRole === 'Admin' && draft.status === 'Pending Approval' && (
+                   {(userRole === 'Admin' || userRole === 'Approver') && draft.status === 'Pending Approval' && (
                        <>
                         <button onClick={() => handleStatusChange(draft, 'Approved')} className="flex items-center gap-1.5 text-xs font-semibold text-green-700 hover:bg-green-100 transition-colors px-3 py-1.5 rounded-md border border-green-200">
                            <CheckCircle size={14} /> Approve
@@ -145,6 +153,11 @@ const DraftsManager: React.FC<DraftsManagerProps> = ({ grant, profile, user }) =
                            <RefreshCw size={14} /> Request Changes
                        </button>
                        </>
+                   )}
+                   {(userRole === 'Admin' || userRole === 'Approver') && draft.status === 'Approved' && (
+                       <button onClick={() => handleStatusChange(draft, 'Draft')} className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 transition-colors px-3 py-1.5 rounded-md border border-gray-200">
+                           <Undo2 size={14} /> Revert to Draft
+                       </button>
                    )}
                </div>
            )}

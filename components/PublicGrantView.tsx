@@ -58,7 +58,8 @@ const PublicGrantView: React.FC<PublicGrantViewProps> = ({ grantId }) => {
     if (!grant) {
         return (
              <div className="bg-gray-50 min-h-screen">
-                <Header user={null} onLogout={() => {}} isPublic={true} />
+                {/* FIX: Removed unsupported `isPublic` prop. */}
+                <Header user={null} onLogout={() => {}} />
                 <div className="container mx-auto text-center py-20">
                     <h1 className="text-3xl font-bold">Grant Not Found</h1>
                     <p className="text-gray-600 mt-2">The grant you are looking for does not exist or may have been removed.</p>
@@ -79,7 +80,8 @@ const PublicGrantView: React.FC<PublicGrantViewProps> = ({ grantId }) => {
 
     return (
         <div className="bg-gray-50 min-h-screen">
-            <Header user={null} onLogout={() => {}} isPublic={true} />
+            {/* FIX: Removed unsupported `isPublic` prop. */}
+            <Header user={null} onLogout={() => {}} />
             <main className="container mx-auto p-4 md:p-8">
                 <div className="max-w-4xl mx-auto">
                     <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-200 mb-6">

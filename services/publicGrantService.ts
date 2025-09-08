@@ -9,7 +9,10 @@ const featuredGrants: PublicGrant[] = [
     fundingAmount: '$50,000 - $250,000',
     url: 'https://grants.com/tech-innovators-2024',
     funder: 'Innovate Foundation',
-    eligibility: 'Open to pre-seed and seed stage technology startups globally. Must have a working prototype or MVP.'
+    eligibility: 'Open to pre-seed and seed stage technology startups globally. Must have a working prototype or MVP.',
+    // FIX: Add missing properties to satisfy the PublicGrant type.
+    industry: 'Technology',
+    deadline: '2024-12-31',
   },
   {
     id: 'community-arts-project-fund-aHR0cHM6Ly9ncmFudHMuY29tL2FydHM=',
@@ -18,7 +21,10 @@ const featuredGrants: PublicGrant[] = [
     fundingAmount: 'Up to $15,000',
     url: 'https://grants.com/community-arts-fund',
     funder: 'Creative Communities Alliance',
-    eligibility: 'Open to individual artists and non-profit organizations located within the United States.'
+    eligibility: 'Open to individual artists and non-profit organizations located within the United States.',
+    // FIX: Add missing properties to satisfy the PublicGrant type.
+    industry: 'Arts & Culture',
+    deadline: 'Rolling',
   },
   {
     id: 'green-energy-research-grant-aHR0cHM6Ly9ncmFudHMuY29tL2dyZWVu',
@@ -27,7 +33,10 @@ const featuredGrants: PublicGrant[] = [
     fundingAmount: '$100,000 - $500,000',
     url: 'https://grants.com/green-energy-research',
     funder: 'Global Sustainability Council',
-    eligibility: 'Applicants must be affiliated with an accredited university or research institution. Focus on solar, wind, and battery technology.'
+    eligibility: 'Applicants must be affiliated with an accredited university or research institution. Focus on solar, wind, and battery technology.',
+    // FIX: Add missing properties to satisfy the PublicGrant type.
+    industry: 'Renewable Energy',
+    deadline: '2025-03-15',
   },
   {
     id: 'empower-women-in-business-grant-aHR0cHM6Ly9ncmFudHMuY29tL3dvbWVu',
@@ -36,7 +45,10 @@ const featuredGrants: PublicGrant[] = [
     fundingAmount: '$25,000',
     url: 'https://grants.com/empower-women-grant',
     funder: 'SheLeads Ventures',
-    eligibility: 'For-profit businesses with at least 51% female ownership, operating for at least one year.'
+    eligibility: 'For-profit businesses with at least 51% female ownership, operating for at least one year.',
+    // FIX: Add missing properties to satisfy the PublicGrant type.
+    industry: 'Business',
+    deadline: 'Varies',
   },
 ];
 

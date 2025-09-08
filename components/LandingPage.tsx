@@ -24,7 +24,8 @@ const LandingPage: React.FC = () => {
     
     return (
         <div className="bg-gray-50 font-sans text-gray-800">
-            <Header user={null} onLogout={() => {}} isPublic={true} />
+            {/* FIX: Removed unsupported `isPublic` prop. */}
+            <Header user={null} onLogout={() => {}} />
 
             {/* Hero Section */}
             <section className="bg-white">

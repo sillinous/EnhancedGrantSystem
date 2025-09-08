@@ -46,6 +46,9 @@ const TeamMemberManager: React.FC<{ team: Team, onUpdate: () => void }> = ({ tea
                                 <option value="Admin">Admin</option>
                                 <option value="Editor">Editor</option>
                                 <option value="Viewer">Viewer</option>
+                                <option value="Approver">Approver</option>
+                                <option value="Stakeholder">Stakeholder</option>
+                                <option value="Partner">Partner</option>
                             </select>
                             <button onClick={() => handleRemoveMember(member.userId)} className="text-red-500 hover:text-red-700">
                                 <Trash2 size={18} />
@@ -154,7 +157,8 @@ const TeamHub: React.FC<TeamHubProps> = ({ user, onLogout, teamId }) => {
 
     return (
         <div className="min-h-screen bg-gray-50">
-            <Header user={user} onLogout={onLogout} isPublic={false} />
+            {/* FIX: Removed unsupported `isPublic` prop. */}
+            <Header user={user} onLogout={onLogout} />
             <main className="container mx-auto p-4 md:p-8">
                 <h1 className="text-3xl font-bold text-gray-800 mb-2">Organization Hub</h1>
                 <p className="text-gray-600 mb-6">Managing "{team.name}"</p>

@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, GenerateContentResponse, Chat, Type } from "@google/genai";
 import { FundingProfile, GrantOpportunity, ChatMessage, EligibilityReport, LifecycleStage, LifecycleInsights, GrantDraft, ApplicationReview, RedTeamReview, BudgetItem, FunderPersona, SuccessPatternAnalysis, DifferentiationAnalysis, CohesionAnalysis, Team } from '../types';
 import * as boilerplateService from './boilerplateService';
@@ -61,7 +62,7 @@ export const findGrants = async (profile: FundingProfile): Promise<{ opportuniti
   const prompt = `
     You are an expert grant sourcing analyst with comprehensive global search capabilities.
     Your task is to identify 7-10 of the most relevant and promising grants or funding opportunities available worldwide for the following profile.
-    Tailor your search to the specific 'Profile Type' provided.
+    Tailor your search to the specific 'Profile Type' provided. For each grant, you MUST also identify the 'industry' it applies to (e.g., 'Technology', 'Healthcare', 'Arts', 'Education') and find the 'applicationDeadline' if available.
 
     Funding Profile:
     - Profile Type: ${profile.profileType}
@@ -71,7 +72,8 @@ export const findGrants = async (profile: FundingProfile): Promise<{ opportuniti
     - Description: ${profile.description}
     - Funding Needs: ${profile.fundingNeeds}
 
-    Return the result ONLY as a valid JSON array of objects. Each object must have these exact keys: "name", "description", "fundingAmount", and "url".
+    Return the result ONLY as a valid JSON array of objects. Each object must have these exact keys: "name", "description", "fundingAmount", "url", "industry", and "deadline".
+    For the deadline, use the format 'YYYY-MM-DD'. If no specific deadline is found, use "Varies" or "Rolling".
     Do not include any text, explanation, or markdown formatting outside of the JSON array itself.
   `;
 
@@ -81,6 +83,22 @@ export const findGrants = async (profile: FundingProfile): Promise<{ opportuniti
     config: {
       tools: [{ googleSearch: {} }],
       temperature: 0.2,
+      responseMimeType: "application/json",
+      responseSchema: {
+          type: Type.ARRAY,
+          items: {
+              type: Type.OBJECT,
+              properties: {
+                  name: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  fundingAmount: { type: Type.STRING },
+                  url: { type: Type.STRING },
+                  industry: { type: Type.STRING },
+                  deadline: { type: Type.STRING },
+              },
+              required: ["name", "description", "fundingAmount", "url", "industry", "deadline"],
+          }
+      }
     },
   });
   
@@ -451,12 +469,23 @@ export const analyzeProposalCohesion = async (grant: GrantOpportunity, drafts: G
 };
 
 export const draftGrantSection = async (profile: FundingProfile, grant: GrantOpportunity, section: string): Promise<string> => {
-  let boilerplateContent = '';
+  let specificBoilerplateContent = '';
+  let generalBoilerplateContent = '';
+
   if (profile.owner.type === 'team') {
     const boilerplates = boilerplateService.getBoilerplates(profile.owner.id);
-    if (boilerplates.length > 0) {
-      boilerplateContent = 'Reference the following official boilerplate content where appropriate:\n\n' +
-        boilerplates.map(b => `--- ${b.title} ---\n${b.content}`).join('\n\n');
+    
+    const specificBoilerplate = boilerplates.find(b => 
+      b.title.toLowerCase().trim() === section.toLowerCase().trim()
+    );
+
+    if (specificBoilerplate) {
+      specificBoilerplateContent = `--- ${specificBoilerplate.title} ---\n${specificBoilerplate.content}`;
+    }
+
+    const generalBoilerplates = boilerplates.filter(b => !specificBoilerplate || b.id !== specificBoilerplate.id);
+    if (generalBoilerplates.length > 0) {
+      generalBoilerplateContent = generalBoilerplates.map(b => `--- ${b.title} ---\n${b.content}`).join('\n\n');
     }
   }
   
@@ -466,11 +495,15 @@ export const draftGrantSection = async (profile: FundingProfile, grant: GrantOpp
     **Your Core Directives:**
     1.  **Adopt an Expert Persona:** Write with authority, clarity, and a persuasive tone. Use active voice and impactful language. Avoid generic statements and business jargon.
     2.  **Synthesize and Tailor:** Meticulously integrate the details from the Funding Profile and the Grant Opportunity. The draft MUST feel custom-written, directly addressing the grant's objectives and priorities using the applicant's strengths.
-    3.  **Structure for Impact:** Ensure the draft is well-organized with a clear narrative flow. It should be compelling from the first sentence to the last.
-    4.  **Be Action-Oriented:** Where specific data is needed, use clear placeholders like "[Insert specific data point or metric]" to guide the user.
+    3.  **Prioritize Boilerplate:** You are provided with two types of boilerplate content. The "Section-Specific Template" is the highest priority and should be used as the primary foundation for your draft if available. The "General Organizational Boilerplate" should be used for context and to fill in any other relevant organizational details.
+    4.  **Structure for Impact:** Ensure the draft is well-organized with a clear narrative flow. It should be compelling from the first sentence to the last.
+    5.  **Be Action-Oriented:** Where specific data is needed, use clear placeholders like "[Insert specific data point or metric]" to guide the user.
 
-    **Organizational Boilerplate (If available, prioritize this as the source of truth):**
-    ${boilerplateContent || 'No boilerplate provided.'}
+    **Section-Specific Template (Highest Priority):**
+    ${specificBoilerplateContent || 'No section-specific template provided.'}
+
+    **General Organizational Boilerplate (For Context):**
+    ${generalBoilerplateContent || 'No general boilerplate provided.'}
 
     **Funding Profile:**
     - Type: ${profile.profileType}
@@ -735,4 +768,79 @@ export const sendMessageToChat = async (chat: Chat, message: string): Promise<st
       }
     }
     return fullResponse;
+};
+export const extractComplianceTasks = async (grantAgreementText: string): Promise<{tasks: {description: string, dueDate: string}[]}> => {
+    const prompt = `
+    You are a meticulous compliance officer AI. Your task is to read the following grant agreement text and extract all actionable compliance tasks and reporting deadlines.
+
+    **Core Directives:**
+    1.  **Identify Actionable Items:** Scan the text for any mention of reports, deadlines, deliverables, or other tasks the grantee is required to complete.
+    2.  **Extract Key Details:** For each item, extract a concise description of the task and its specific due date.
+    3.  **Format Dates:** Standardize all extracted dates to 'YYYY-MM-DD' format. If a date is ambiguous (e.g., "end of the quarter"), make a reasonable estimation and note it. If no date is found for a task, omit it from the results.
+    4.  **Format Output:** Return your findings ONLY as a single, valid JSON object with a single key "tasks", which is an array of objects. Each object in the array must have "description" and "dueDate" keys. If no tasks are found, return an empty "tasks" array.
+
+    **Grant Agreement Text:**
+    ---
+    ${grantAgreementText}
+    ---
+  `;
+
+    const response = await ai.models.generateContent({
+        model: chatModel,
+        contents: prompt,
+        config: {
+            temperature: 0.1,
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    tasks: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                description: { type: Type.STRING },
+                                dueDate: { type: Type.STRING }
+                            },
+                            required: ["description", "dueDate"]
+                        }
+                    }
+                },
+                required: ["tasks"]
+            }
+        }
+    });
+
+    return parseJsonFromMarkdown(response.text);
+};
+export const generateImpactStory = async (dataPoints: string): Promise<string> => {
+    const prompt = `
+    You are a professional storyteller and non-profit communications expert. Your task is to transform a list of raw data points and achievements into a single, compelling, human-centered narrative paragraph.
+
+    **Core Directives:**
+    1.  **Find the Narrative:** Don't just list the data. Weave the points together into a story that shows impact.
+    2.  **Focus on People:** Translate numbers into human terms. Instead of "served 150 meals," write about "providing a warm, nutritious meal to 150 of our neighbors."
+    3.  **Use Evocative Language:** Employ strong verbs and descriptive adjectives to create an emotional connection.
+    4.  **Be Concise and Powerful:** The output should be a single, impactful paragraph suitable for a grant report or a website update.
+
+    **Raw Data Points Provided by User:**
+    ---
+    ${dataPoints}
+    ---
+
+    **Your Task:**
+    Produce a single narrative paragraph based on the data. The output must be ONLY the text of the story itself, with no introductory or concluding remarks.
+  `;
+
+    const response = await ai.models.generateContent({
+        model: chatModel,
+        contents: prompt,
+        config: {
+            temperature: 0.8,
+            topK: 40,
+            topP: 0.95
+        }
+    });
+
+    return response.text.trim();
 };

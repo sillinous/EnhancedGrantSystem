@@ -5,6 +5,8 @@ const APP_CONFIG_KEY = 'grantfinder_appConfig';
 
 const defaultConfig: AppConfig = {
   monetizationModel: 'Free',
+  // FIX: Add missing required property `enabledSSOProviders`.
+  enabledSSOProviders: [],
 };
 
 export const getConfig = (): AppConfig => {
