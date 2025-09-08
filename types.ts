@@ -48,6 +48,7 @@ export interface ChecklistItem {
   id: number;
   text: string;
   completed: boolean;
+  dueDate?: string;
   documentId?: number;
   documentName?: string;
 }
@@ -73,6 +74,7 @@ export interface GrantDraft {
   section: string;
   content: string;
   createdAt: string;
+  status: 'Draft' | 'Pending Approval' | 'Approved';
 }
 
 export interface ReportingRequirement {
@@ -144,6 +146,28 @@ export interface DifferentiationAnalysis {
   generatedAt: string;
 }
 
+export interface CohesionFinding {
+  finding: string;
+  sections: string[];
+  severity: 'Critical' | 'Warning' | 'Suggestion';
+}
+
+export interface CohesionAnalysis {
+  findings: CohesionFinding[];
+  generatedAt: string;
+}
+
+export interface ExtractedComplianceTask {
+  description: string;
+  dueDate: string;
+}
+
+export interface ImpactStory {
+  userInput: string;
+  generatedStory: string;
+  createdAt: string;
+}
+
 export interface SourcingAgent {
   id: string;
   name: string;
@@ -154,6 +178,7 @@ export interface SourcingAgent {
 // --- New Types for Monetization and User Roles ---
 
 export type Role = 'User' | 'Admin';
+export type TeamRole = 'Admin' | 'Editor' | 'Viewer';
 
 export interface User {
   id: number;
@@ -176,10 +201,22 @@ export interface Subscription {
   currentPeriodEnd: number; // timestamp
 }
 
+export interface TeamMember {
+    userId: number;
+    role: TeamRole;
+}
+
 export interface Team {
     id: number;
     name: string;
-    memberIds: number[];
+    members: TeamMember[];
+}
+
+export interface BoilerplateDocument {
+    id: number;
+    teamId: number;
+    title: string;
+    content: string;
 }
 
 export interface ActivityLog {
@@ -188,4 +225,10 @@ export interface ActivityLog {
     username: string;
     userId: number;
     action: string;
+}
+
+export interface SuperAdminStats {
+    totalUsers: number;
+    activeSubscriptions: number;
+    totalTeams: number;
 }

@@ -3,7 +3,8 @@ import * as authService from './authService';
 
 const SUBSCRIPTIONS_KEY = 'grantfinder_subscriptions';
 
-const getAllSubscriptions = (): Record<string, Subscription> => {
+// FIX: Export `getAllSubscriptions` to make it accessible to other modules.
+export const getAllSubscriptions = (): Record<string, Subscription> => {
   try {
     const subsJson = localStorage.getItem(SUBSCRIPTIONS_KEY);
     return subsJson ? JSON.parse(subsJson) : {};

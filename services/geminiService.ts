@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, GenerateContentResponse, Chat, Type } from "@google/genai";
-import { FundingProfile, GrantOpportunity, ChatMessage, EligibilityReport, LifecycleStage, LifecycleInsights, GrantDraft, ApplicationReview, RedTeamReview, BudgetItem, FunderPersona, SuccessPatternAnalysis, DifferentiationAnalysis } from '../types';
+import { FundingProfile, GrantOpportunity, ChatMessage, EligibilityReport, LifecycleStage, LifecycleInsights, GrantDraft, ApplicationReview, RedTeamReview, BudgetItem, FunderPersona, SuccessPatternAnalysis, DifferentiationAnalysis, CohesionAnalysis, Team } from '../types';
+import * as boilerplateService from './boilerplateService';
 
 if (!process.env.API_KEY) {
   throw new Error("API_KEY environment variable not set");
@@ -376,7 +377,89 @@ export const analyzeDifferentiation = async (grant: GrantOpportunity, drafts: Gr
   return { ...analysisData, generatedAt: new Date().toISOString() };
 };
 
+export const analyzeProposalCohesion = async (grant: GrantOpportunity, drafts: GrantDraft[], budgetItems: BudgetItem[]): Promise<CohesionAnalysis> => {
+  const applicationContent = drafts.map(d => `--- ${d.section} ---\n${d.content}`).join('\n\n');
+  const totalBudget = budgetItems.reduce((sum, item) => sum + item.amount, 0);
+  const budgetSummary = `Total Budget: $${totalBudget.toLocaleString()}\nItems:\n${budgetItems.map(i => `- ${i.description}: $${i.amount.toLocaleString()}`).join('\n')}`;
+
+  const prompt = `
+    You are a meticulous and detail-oriented grant proposal editor. Your SOLE task is to analyze an entire grant application package for internal cohesion and consistency. You must identify any contradictions, mismatches, or logical gaps BETWEEN different sections.
+
+    **Core Directives:**
+    1.  **Cross-Reference Everything:** Compare the 'Project Goals' against the 'Budget', the 'Executive Summary' against the 'Methods', etc.
+    2.  **Focus on Inconsistencies:** Do not review for quality, grammar, or persuasiveness. Only identify direct contradictions.
+    3.  **Check Numbers:** Pay very close attention to mismatched numbers (e.g., funding amounts, number of beneficiaries, timelines).
+    4.  **Assign Severity:**
+        - 'Critical': Direct contradictions in numbers or core objectives that would likely cause rejection.
+        - 'Warning': Misalignments in details or activities that create ambiguity or weaken the proposal.
+        - 'Suggestion': Minor inconsistencies or areas where cohesion could be improved.
+    5.  **Format Output:** Return your analysis ONLY as a single, valid JSON object that strictly adheres to the provided schema. If there are no findings, return an empty 'findings' array.
+
+    **Grant Context:**
+    - Name: ${grant.name}
+    - Description: ${grant.description}
+
+    **Applicant's Drafts:**
+    ${applicationContent}
+
+    **Applicant's Budget:**
+    ${budgetSummary}
+
+    **Your Task:**
+    Analyze the documents and return a JSON object of your findings.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: chatModel,
+    contents: prompt,
+    config: {
+      temperature: 0.5,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          findings: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                finding: {
+                  type: Type.STRING,
+                  description: "A clear, concise description of the inconsistency found."
+                },
+                sections: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                  description: "The names of the sections where the inconsistency was observed (e.g., ['Budget', 'Project Activities'])."
+                },
+                severity: {
+                  type: Type.STRING,
+                  description: "The severity of the finding: 'Critical', 'Warning', or 'Suggestion'."
+                }
+              },
+              required: ["finding", "sections", "severity"]
+            }
+          }
+        },
+        required: ["findings"]
+      }
+    }
+  });
+
+  const analysisData = parseJsonFromMarkdown(response.text);
+  return { ...analysisData, generatedAt: new Date().toISOString() };
+};
+
 export const draftGrantSection = async (profile: FundingProfile, grant: GrantOpportunity, section: string): Promise<string> => {
+  let boilerplateContent = '';
+  if (profile.owner.type === 'team') {
+    const boilerplates = boilerplateService.getBoilerplates(profile.owner.id);
+    if (boilerplates.length > 0) {
+      boilerplateContent = 'Reference the following official boilerplate content where appropriate:\n\n' +
+        boilerplates.map(b => `--- ${b.title} ---\n${b.content}`).join('\n\n');
+    }
+  }
+  
   const prompt = `
     You are an elite grant writing consultant, recognized for crafting award-winning proposals that secure significant funding. Your task is to write a powerful and persuasive draft for the '${section}' section of a grant application.
 
@@ -385,6 +468,9 @@ export const draftGrantSection = async (profile: FundingProfile, grant: GrantOpp
     2.  **Synthesize and Tailor:** Meticulously integrate the details from the Funding Profile and the Grant Opportunity. The draft MUST feel custom-written, directly addressing the grant's objectives and priorities using the applicant's strengths.
     3.  **Structure for Impact:** Ensure the draft is well-organized with a clear narrative flow. It should be compelling from the first sentence to the last.
     4.  **Be Action-Oriented:** Where specific data is needed, use clear placeholders like "[Insert specific data point or metric]" to guide the user.
+
+    **Organizational Boilerplate (If available, prioritize this as the source of truth):**
+    ${boilerplateContent || 'No boilerplate provided.'}
 
     **Funding Profile:**
     - Type: ${profile.profileType}

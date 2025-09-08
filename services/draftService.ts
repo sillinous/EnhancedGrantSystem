@@ -45,6 +45,7 @@ export const addDraft = (grant: GrantOpportunity, draftData: { section: string; 
     grantId,
     ...draftData,
     createdAt: new Date().toISOString(),
+    status: 'Draft',
   };
 
   allDrafts[grantId] = [...grantDrafts, newDraft];

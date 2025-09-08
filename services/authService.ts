@@ -2,6 +2,7 @@ import { User, Role } from '../types';
 
 const CURRENT_USER_KEY = 'grantfinder_currentUser';
 const ALL_USERS_KEY = 'grantfinder_allUsers';
+const IMPERSONATOR_KEY = 'grantfinder_impersonator';
 
 // In a real application, this would come from a database.
 const defaultUsers: User[] = [
@@ -11,7 +12,7 @@ const defaultUsers: User[] = [
   { id: 4, username: 'teammate@example.com', role: 'User', isSubscribed: false, teamIds: [101] },
 ];
 
-const getAllUsers = (): User[] => {
+export const getAllUsers = (): User[] => {
     try {
         const usersJson = localStorage.getItem(ALL_USERS_KEY);
         if (usersJson) {
@@ -43,6 +44,7 @@ export const login = (username: string, password?: string): User | null => {
 
 export const logout = (): void => {
   localStorage.removeItem(CURRENT_USER_KEY);
+  localStorage.removeItem(IMPERSONATOR_KEY);
 };
 
 export const getCurrentUser = (): User | null => {
@@ -54,6 +56,47 @@ export const getCurrentUser = (): User | null => {
     return null;
   }
 };
+
+export const getImpersonator = (): User | null => {
+  try {
+    const userJson = localStorage.getItem(IMPERSONATOR_KEY);
+    return userJson ? JSON.parse(userJson) : null;
+  } catch {
+    return null;
+  }
+};
+
+
+export const impersonate = (targetUserId: number): boolean => {
+    const adminUser = getCurrentUser();
+    if (!adminUser || adminUser.role !== 'Admin') {
+        console.error("Only admins can impersonate.");
+        return false;
+    }
+
+    const targetUser = getAllUsers().find(u => u.id === targetUserId);
+    if (!targetUser) {
+        console.error("Target user not found.");
+        return false;
+    }
+
+    localStorage.setItem(IMPERSONATOR_KEY, JSON.stringify(adminUser));
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(targetUser));
+    return true;
+};
+
+export const stopImpersonation = (): boolean => {
+    const adminUser = getImpersonator();
+    if (!adminUser) {
+        console.error("Not in impersonation mode.");
+        return false;
+    }
+
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(adminUser));
+    localStorage.removeItem(IMPERSONATOR_KEY);
+    return true;
+};
+
 
 export const updateSubscriptionStatus = (userId: number, isSubscribed: boolean): User | null => {
     const allUsers = getAllUsers();

@@ -6,12 +6,15 @@ import { getAllGrantStatuses, saveGrantStatus } from './services/grantStatusServ
 import * as authService from './services/authService';
 import * as teamService from './services/teamService';
 import * as subscriptionService from './services/subscriptionService';
+import * as trackedGrantService from './services/trackedGrantService';
 import Header from './components/Header';
 import OpportunitiesDashboard from './components/OpportunitiesDashboard';
 import LoadingSpinner from './components/LoadingSpinner';
 import ProfileSelection from './components/ProfileSelection';
 import Login from './components/Login';
-import AdminDashboard from './components/AdminDashboard';
+import AppConfigDashboard from './components/AppConfigDashboard';
+import SuperAdminDashboard from './components/SuperAdminDashboard';
+import TeamHub from './components/TeamHub';
 import LandingPage from './components/LandingPage';
 import PublicGrantView from './components/PublicGrantView';
 import ResourceCenter from './components/ResourceCenter';
@@ -19,6 +22,7 @@ import Modal from './components/Modal';
 import TeamManager from './components/TeamManager';
 import PricingPage from './components/PricingPage';
 import CustomerPortal from './components/CustomerPortal';
+import Dashboard from './components/Dashboard';
 
 const MainApp: React.FC<{ user: User, onLogout: () => void, onSubscriptionChange: (user: User) => void }> = ({ user, onLogout, onSubscriptionChange }) => {
   const [profiles, setProfiles] = useState<FundingProfile[]>([]);
@@ -31,7 +35,6 @@ const MainApp: React.FC<{ user: User, onLogout: () => void, onSubscriptionChange
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [isAdminView, setIsAdminView] = useState(false);
   const [isTeamManagerOpen, setIsTeamManagerOpen] = useState(false);
 
   useEffect(() => {
@@ -64,14 +67,6 @@ const MainApp: React.FC<{ user: User, onLogout: () => void, onSubscriptionChange
       saveProfiles([...otherProfiles, ...profiles]);
     }
   }, [profiles, isInitialLoad]);
-
-  const handleToggleAdminView = () => {
-    setIsAdminView(prev => !prev);
-    if (!isAdminView) {
-      setActiveProfile(null);
-      setGrants([]);
-    }
-  };
 
   const handleSearch = useCallback(async (profileToSearch: FundingProfile) => {
     setIsLoading(true);
@@ -145,7 +140,6 @@ const MainApp: React.FC<{ user: User, onLogout: () => void, onSubscriptionChange
     setGrants([]);
     setSources([]);
     setError(null);
-    setIsAdminView(false);
   }, []);
 
   const handleRefresh = useCallback(() => {
@@ -155,6 +149,7 @@ const MainApp: React.FC<{ user: User, onLogout: () => void, onSubscriptionChange
   }, [activeProfile, handleSearch]);
 
   const handleStatusChange = useCallback((grant: GrantOpportunity, status: GrantStatus) => {
+    trackedGrantService.addTrackedGrant(grant);
     setGrantStatuses(prev => {
       const newStatuses = { ...prev };
       const grantId = `${grant.name}_${grant.url}`.replace(/[^a-zA-Z0-9]/g, '');
@@ -171,15 +166,10 @@ const MainApp: React.FC<{ user: User, onLogout: () => void, onSubscriptionChange
         user={user}
         onLogout={onLogout}
         onReset={handleReset}
-        showReset={!!activeProfile || isAdminView}
-        onToggleAdminView={handleToggleAdminView}
-        isAdminView={isAdminView}
         isPublic={false}
       />
       <main className="container mx-auto p-4 md:p-8">
-        {isAdminView && user.role === 'Admin' ? (
-          <AdminDashboard />
-        ) : !activeProfile ? (
+        {!activeProfile ? (
           <ProfileSelection
             user={user}
             teams={teams}
@@ -224,6 +214,23 @@ const MainApp: React.FC<{ user: User, onLogout: () => void, onSubscriptionChange
   );
 };
 
+const ImpersonationBanner: React.FC = () => {
+    const impersonator = authService.getImpersonator();
+    if (!impersonator) return null;
+
+    const handleStop = () => {
+        authService.stopImpersonation();
+        window.location.href = '/super-admin';
+    };
+
+    return (
+        <div className="bg-yellow-400 text-black text-center p-2 font-bold text-sm">
+            You are impersonating another user. <button onClick={handleStop} className="underline hover:text-red-700">Return to Admin</button>
+        </div>
+    );
+};
+
+
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(authService.getCurrentUser());
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -257,7 +264,7 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    window.history.pushState({}, '', '/app');
+    window.history.pushState({}, '', '/dashboard');
   };
   
   const handleSubscriptionChange = (user: User) => {
@@ -278,14 +285,42 @@ const App: React.FC = () => {
   const grantIdMatch = location.match(/\/grant\/(.+)/);
 
   if (currentUser) {
+    const AppContainer: React.FC<{children: React.ReactNode}> = ({children}) => (
+        <>
+            <ImpersonationBanner />
+            {children}
+        </>
+    );
+
     if (location === '/pricing') {
-       return <PricingPage user={currentUser} onSubscriptionSuccess={handleSubscriptionChange} />;
+       return <AppContainer><PricingPage user={currentUser} onSubscriptionSuccess={handleSubscriptionChange} /></AppContainer>;
     }
-     if (location === '/account') {
-       return <CustomerPortal user={currentUser} onSubscriptionChange={handleSubscriptionChange} />;
+    if (location === '/account') {
+       return <AppContainer><CustomerPortal user={currentUser} onSubscriptionChange={handleSubscriptionChange} /></AppContainer>;
     }
-    // Any other path for a logged in user goes to the app
-    return <MainApp user={currentUser} onLogout={handleLogout} onSubscriptionChange={handleSubscriptionChange} />;
+    if (location === '/app') {
+      return <AppContainer><MainApp user={currentUser} onLogout={handleLogout} onSubscriptionChange={handleSubscriptionChange} /></AppContainer>;
+    }
+     if (location === '/resources') {
+      return <AppContainer><div className="min-h-screen"><Header user={currentUser} onLogout={handleLogout} isPublic={false} /><ResourceCenter /></div></AppContainer>;
+    }
+    if (location === '/app-config' && currentUser.role === 'Admin') {
+      return <AppContainer><div className="min-h-screen"><Header user={currentUser} onLogout={handleLogout} isPublic={false} /><div className="p-8"><AppConfigDashboard /></div></div></AppContainer>;
+    }
+    if (location === '/super-admin' && currentUser.role === 'Admin') {
+      return <AppContainer><SuperAdminDashboard user={currentUser} onLogout={handleLogout} /></AppContainer>;
+    }
+    if (location.startsWith('/team-hub/')) {
+        const teamId = parseInt(location.split('/')[2]);
+        if (!isNaN(teamId)) {
+            const role = teamService.getUserRoleInTeam(currentUser.id, teamId);
+            if (role === 'Admin') {
+                return <AppContainer><TeamHub user={currentUser} onLogout={handleLogout} teamId={teamId} /></AppContainer>;
+            }
+        }
+    }
+    // Any other path for a logged in user goes to the dashboard
+    return <AppContainer><Dashboard user={currentUser} onLogout={handleLogout} /></AppContainer>;
   }
 
   // Public Routes

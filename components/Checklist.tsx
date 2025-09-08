@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { GrantOpportunity, ChecklistItem, FundingProfile, Document } from '../types';
 import { getChecklist, saveChecklist } from '../services/checklistService';
 import { getDocuments } from '../services/documentService';
-import { Plus, Trash2, Paperclip, FileText, X } from 'lucide-react';
+import { Plus, Trash2, Paperclip, FileText, X, Calendar } from 'lucide-react';
 
 interface ChecklistProps {
   grant: GrantOpportunity;
@@ -13,6 +12,7 @@ interface ChecklistProps {
 const Checklist: React.FC<ChecklistProps> = ({ grant, profile }) => {
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [newItemText, setNewItemText] = useState('');
+  const [newItemDueDate, setNewItemDueDate] = useState('');
   const [attachingToItemId, setAttachingToItemId] = useState<number | null>(null);
   const [availableDocs, setAvailableDocs] = useState<Document[]>([]);
 
@@ -33,9 +33,11 @@ const Checklist: React.FC<ChecklistProps> = ({ grant, profile }) => {
       id: Date.now(),
       text: newItemText.trim(),
       completed: false,
+      dueDate: newItemDueDate || undefined,
     };
     updateAndSave([...items, newItem]);
     setNewItemText('');
+    setNewItemDueDate('');
   };
 
   const handleToggleItem = (id: number) => {
@@ -79,23 +81,32 @@ const Checklist: React.FC<ChecklistProps> = ({ grant, profile }) => {
       <h3 className="text-lg font-semibold text-gray-800 mb-4">
         Application Checklist
       </h3>
-      <form onSubmit={handleAddItem} className="flex gap-2 mb-4">
+      <form onSubmit={handleAddItem} className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4 items-center">
         <input
           type="text"
           value={newItemText}
           onChange={(e) => setNewItemText(e.target.value)}
-          placeholder="Add a new task (e.g., 'Prepare budget')"
-          className="flex-grow px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary text-sm"
+          placeholder="Add a new task..."
+          className="md:col-span-2 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary text-sm"
           aria-label="New checklist item"
         />
-        <button
-          type="submit"
-          className="flex-shrink-0 p-2 bg-primary text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-          disabled={!newItemText.trim()}
-          aria-label="Add checklist item"
-        >
-          <Plus size={20} />
-        </button>
+        <div className="flex gap-2">
+            <input
+              type="date"
+              value={newItemDueDate}
+              onChange={(e) => setNewItemDueDate(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary text-sm text-gray-500"
+              aria-label="Due date for new item"
+            />
+            <button
+              type="submit"
+              className="flex-shrink-0 p-2 bg-primary text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              disabled={!newItemText.trim()}
+              aria-label="Add checklist item"
+            >
+              <Plus size={20} />
+            </button>
+        </div>
       </form>
       <ul className="space-y-2">
         {items.length > 0 ? (
@@ -104,17 +115,25 @@ const Checklist: React.FC<ChecklistProps> = ({ grant, profile }) => {
               key={item.id}
               className="flex items-center justify-between p-2 rounded-md group transition-colors hover:bg-gray-50"
             >
-              <label className="flex items-center flex-grow cursor-pointer mr-2">
-                <input
-                  type="checkbox"
-                  checked={item.completed}
-                  onChange={() => handleToggleItem(item.id)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary mr-3 cursor-pointer"
-                />
-                <span className={`text-sm text-gray-700 ${item.completed ? 'line-through text-gray-500' : ''}`}>
-                  {item.text}
-                </span>
-              </label>
+              <div className="flex items-center flex-grow mr-2">
+                 <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={item.completed}
+                      onChange={() => handleToggleItem(item.id)}
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary mr-3 cursor-pointer"
+                    />
+                    <span className={`text-sm text-gray-700 ${item.completed ? 'line-through text-gray-500' : ''}`}>
+                      {item.text}
+                    </span>
+                 </label>
+                 {item.dueDate && (
+                    <div className="ml-3 flex items-center gap-1 text-xs text-gray-500">
+                        <Calendar size={12} />
+                        <span>{new Date(item.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}</span>
+                    </div>
+                 )}
+              </div>
 
               <div className="flex items-center gap-1 relative flex-shrink-0">
                 {item.documentName ? (

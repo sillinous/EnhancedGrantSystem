@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { MonetizationModel, AppConfig, SourcingAgent } from '../types';
 import * as configService from '../services/configService';
 import * as sourcingService from '../services/sourcingService';
 import { DollarSign, BarChart2, Users, Settings, Cpu, Globe } from 'lucide-react';
 
-const AdminDashboard: React.FC = () => {
+const AppConfigDashboard: React.FC = () => {
   const [config, setConfig] = useState<AppConfig>(configService.getConfig());
   const [agents, setAgents] = useState<SourcingAgent[]>([]);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -35,7 +34,7 @@ const AdminDashboard: React.FC = () => {
 
   return (
     <div className="animate-fade-in space-y-8">
-      <h1 className="text-3xl font-bold text-gray-800">Admin Dashboard</h1>
+      <h1 className="text-3xl font-bold text-gray-800">App Configuration</h1>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card title="App Configuration" icon={<Settings size={24} />} className="lg:col-span-1">
@@ -99,4 +98,4 @@ const AdminDashboard: React.FC = () => {
   );
 };
 
-export default AdminDashboard;
+export default AppConfigDashboard;

@@ -457,7 +457,8 @@ const GrantDetailView: React.FC<GrantDetailViewProps> = ({ grant, profile, onClo
               </div>
             )}
             {activeTab === 'Checklist' && <Checklist grant={grant} profile={profile} />}
-            {activeTab === 'Drafts' && <DraftsManager grant={grant} key={grant.url + draftsUpdated} />}
+            {/* FIX: Pass missing `profile` and `user` props to DraftsManager */}
+            {activeTab === 'Drafts' && <DraftsManager grant={grant} profile={profile} user={user} key={grant.url + draftsUpdated} />}
             {activeTab === 'Budget' && <BudgetAssistant grant={grant} profile={profile} />}
             {activeTab === 'Review' && <ApplicationReviewer grant={grant} profile={profile} user={user} />}
             {activeTab === 'Assistant' && <ChatAssistant user={user} grant={grant} profile={profile} onSaveDraft={handleSaveDraft} />}
