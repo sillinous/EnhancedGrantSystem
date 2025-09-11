@@ -34,7 +34,7 @@ interface GrantDetailViewProps {
   profile: FundingProfile;
   onClose: () => void;
   sources: GroundingSource[];
-  onStatusChange: (grant: GrantOpportunity, status: GrantStatus) => void;
+  onStatusChange: (grant: GrantOpportunity, status: GrantStatus) => Promise<void>;
   user: User;
 }
 
@@ -104,9 +104,9 @@ const GrantDetailView: React.FC<GrantDetailViewProps> = ({ grant, profile, onClo
     }
   }, [grant, user.id, config.monetizationModel]);
 
-  const handleStatusChange = (newStatus: GrantStatus) => {
+  const handleStatusChange = async (newStatus: GrantStatus) => {
       if (!grant) return;
-      onStatusChange(grant, newStatus);
+      await onStatusChange(grant, newStatus);
       logActivity(`updated status to '${newStatus}'`);
       if (newStatus === 'Awarded') {
           setActiveTab('Reporting');

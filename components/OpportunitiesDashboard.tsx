@@ -16,7 +16,7 @@ interface OpportunitiesDashboardProps {
   profile: FundingProfile;
   grants: GrantOpportunity[];
   grantStatuses: Record<string, GrantStatus>;
-  onStatusChange: (grant: GrantOpportunity, status: GrantStatus) => void;
+  onStatusChange: (grant: GrantOpportunity, status: GrantStatus) => Promise<void>;
   sources: GroundingSource[];
   onRefresh: () => void;
   isRefreshing: boolean;
@@ -77,14 +77,16 @@ const OpportunitiesDashboard: React.FC<OpportunitiesDashboardProps> = ({ profile
     }
   };
 
-  const handleBulkStatusChange = () => {
+  const handleBulkStatusChange = async () => {
     if (selectedGrantIds.size === 0) return;
     
     const grantsToUpdate = grantsWithStatuses.filter(g => selectedGrantIds.has(getGrantId(g)));
     
-    grantsToUpdate.forEach(grant => {
-        onStatusChange(grant, bulkStatus);
+    const updatePromises = grantsToUpdate.map(grant => {
+        return onStatusChange(grant, bulkStatus);
     });
+
+    await Promise.all(updatePromises);
 
     toggleSelectMode(); // Exit select mode after applying
   };

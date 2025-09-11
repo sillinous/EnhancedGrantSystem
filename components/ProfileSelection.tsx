@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { FundingProfile, User, Team } from '../types';
 import ProfileForm from './ProfileForm';
@@ -8,7 +7,7 @@ interface ProfileSelectionProps {
   user: User;
   teams: Team[];
   profiles: FundingProfile[];
-  onCreateOrUpdate: (profile: Omit<FundingProfile, 'id'>, id?: number) => void;
+  onCreateOrUpdate: (profile: Omit<FundingProfile, 'id' | 'owner'>, id?: number) => void;
   onSelect: (profile: FundingProfile) => void;
   onDelete: (profileId: number) => void;
   isLoading: boolean;
@@ -128,13 +127,8 @@ const ProfileSelection: React.FC<ProfileSelectionProps> = ({ user, teams, profil
            </h2>
            <ProfileForm 
               onSubmit={(profileData, id) => {
-                  const owner = profileData.profileType === 'Individual' ? { type: 'user' as const, id: user.id } : profileToEdit?.owner || { type: 'team' as const, id: user.teamIds[0] || -1 };
-                  if(owner.type === 'team' && owner.id === -1) {
-                      alert("You must be part of a team to create a Business or Non-Profit profile. Please create a team first.");
-                      return;
-                  }
-                  const profileWithOwner = { ...profileData, owner };
-                  onCreateOrUpdate(profileWithOwner, id);
+                  // Ownership is now handled by the backend. Just pass the form data.
+                  onCreateOrUpdate(profileData, id);
               }}
               isLoading={isLoading} 
               initialData={profileToEdit}

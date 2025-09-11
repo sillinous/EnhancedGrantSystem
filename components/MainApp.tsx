@@ -34,17 +34,30 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
   const [grantStatuses, setGrantStatuses] = useState<Record<string, GrantStatus>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profileToEdit, setProfileToEdit] = useState<FundingProfile | null>(null);
   const [isTeamManagerOpen, setIsTeamManagerOpen] = useState(false);
 
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
-    setProfiles(profileService.getProfiles());
-    setTeams(teamService.getTeamsForUser(user.id));
-    setGrantStatuses(grantStatusService.getAllGrantStatuses());
-    setIsLoading(false);
+    setError(null);
+    try {
+        const [userProfiles, userTeams, allStatuses] = await Promise.all([
+            profileService.getProfiles(),
+            Promise.resolve(teamService.getTeamsForUser(user.id)), // Keep team service local for now
+            grantStatusService.getAllGrantStatuses()
+        ]);
+        setProfiles(userProfiles);
+        setTeams(userTeams);
+        setGrantStatuses(allStatuses);
+    } catch (err) {
+        console.error(err);
+        setError("Failed to load your data. Please try refreshing the page.");
+    } finally {
+        setIsLoading(false);
+    }
   }, [user.id]);
 
   useEffect(() => {
@@ -60,7 +73,8 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
       setGrants(result.opportunities);
       setSources(result.sources);
       // Track all found grants so they appear in the pipeline
-      result.opportunities.forEach(grant => trackedGrantService.addTrackedGrant(grant));
+      const addPromises = result.opportunities.map(grant => trackedGrantService.addTrackedGrant(grant));
+      await Promise.all(addPromises);
     } catch (e) {
       console.error(e);
       setError("The AI couldn't find grants for this profile. The service may be busy. Please try again later.");
@@ -70,53 +84,61 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
     }
   };
 
-  const handleCreateOrUpdateProfile = (profileData: Omit<FundingProfile, 'id' | 'owner'>, id?: number) => {
-    const allProfiles = profileService.getProfiles();
+  const handleCreateOrUpdateProfile = async (profileData: Omit<FundingProfile, 'id' | 'owner'>, id?: number) => {
+    setIsSaving(true);
+    setError(null);
+    
     let profileToSearch: FundingProfile | null = null;
-    
-    if (id) { // Update
-      const existingProfile = allProfiles.find(p => p.id === id);
-      if(!existingProfile) return;
-      
-      const updatedProfile = { ...existingProfile, ...profileData };
-      const updatedProfiles = allProfiles.map(p => p.id === id ? updatedProfile : p);
-      profileService.saveProfiles(updatedProfiles);
-      profileToSearch = updatedProfile;
 
-    } else { // Create
-      const owner = profileData.profileType === 'Individual' 
-        ? { type: 'user' as const, id: user.id } 
-        : { type: 'team' as const, id: user.teamIds[0] };
-      
-      if(owner.type === 'team' && !owner.id) {
-          alert("You must be part of a team to create a Business or Non-Profit profile.");
-          return;
-      }
+    try {
+        if (id) { // Update
+            const existingProfile = profiles.find(p => p.id === id);
+            if (!existingProfile) throw new Error("Profile not found");
+            const updatedProfile = { ...existingProfile, ...profileData };
+            await profileService.updateProfile(updatedProfile);
+            profileToSearch = updatedProfile;
+        } else { // Create
+            await profileService.addProfile(profileData);
+        }
+    } catch (err) {
+        setError("Failed to save the profile. Please try again.");
+        console.error(err);
+    } finally {
+        setProfileToEdit(null);
+        await loadData();
+        setIsSaving(false);
 
-      const newProfile: FundingProfile = { ...profileData, id: Date.now(), owner };
-      profileService.saveProfiles([...allProfiles, newProfile]);
-    }
-    
-    setProfileToEdit(null);
-    loadData();
-
-    if (profileToSearch) {
-        handleProfileSelect(profileToSearch);
+        if (profileToSearch) {
+            await handleProfileSelect(profileToSearch);
+        }
     }
   };
   
-  const handleDeleteProfile = (profileId: number) => {
+  const handleDeleteProfile = async (profileId: number) => {
     if (window.confirm("Are you sure you want to delete this profile? This action cannot be undone.")) {
-        const updatedProfiles = profiles.filter(p => p.id !== profileId);
-        profileService.saveProfiles(updatedProfiles);
-        loadData();
+        try {
+            await profileService.deleteProfile(profileId);
+            await loadData();
+        } catch (err) {
+            setError("Failed to delete profile.");
+            console.error(err);
+        }
     }
   };
   
-  const handleStatusChange = (grant: GrantOpportunity, status: GrantStatus) => {
+  const handleStatusChange = async (grant: GrantOpportunity, status: GrantStatus) => {
       const grantId = getGrantId(grant);
-      grantStatusService.saveGrantStatus(grantId, status);
-      setGrantStatuses(grantStatusService.getAllGrantStatuses());
+      // Optimistic UI update
+      setGrantStatuses(prev => ({...prev, [grantId]: status}));
+      try {
+          await grantStatusService.saveGrantStatus(grantId, status);
+      } catch (e) {
+          console.error("Failed to update status on server:", e);
+          // Rollback
+          const allStatuses = await grantStatusService.getAllGrantStatuses();
+          setGrantStatuses(allStatuses);
+          setError("Failed to update grant status. Please try again.");
+      }
   };
 
   const handleRefreshSearch = () => {
@@ -186,7 +208,7 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
         onSelect={handleProfileSelect}
         onCreateOrUpdate={handleCreateOrUpdateProfile}
         onDelete={handleDeleteProfile}
-        isLoading={isSearching}
+        isLoading={isSaving || isSearching}
         onEdit={(profile) => {
             setProfileToEdit(profile);
             const formElement = document.getElementById('profile-form-section');

@@ -13,6 +13,10 @@ const defaultUsers: User[] = [
   { id: 4, username: 'teammate@example.com', role: 'User', isSubscribed: false, teamIds: [101] },
 ];
 
+export const getToken = (): string | null => {
+    return localStorage.getItem(TOKEN_KEY);
+};
+
 export const getAllUsers = (): User[] => {
     try {
         const usersJson = localStorage.getItem(ALL_USERS_KEY);
@@ -52,13 +56,22 @@ export const login = async (username: string, password?: string): Promise<User |
 export const logout = (): void => {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(IMPERSONATOR_KEY);
+  sessionStorage.removeItem('impersonated_user');
 };
 
 export const verifySession = async (): Promise<User | null> => {
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = getToken();
   if (!token) {
     return null;
   }
+  
+  // This is special handling for the client-side impersonation demo.
+  // In a real system, the token itself would be an impersonation token.
+  const impersonatedUserJson = sessionStorage.getItem('impersonated_user');
+   if (impersonatedUserJson && token.startsWith('mock-token-for-user-')) {
+       return JSON.parse(impersonatedUserJson);
+   }
+
 
   try {
     const response = await fetch(`${API_URL}/auth/me`, {
@@ -82,21 +95,6 @@ export const verifySession = async (): Promise<User | null> => {
   }
 };
 
-// getCurrentUser is now a simple synchronous check for the token's existence,
-// but the actual user data comes from the async verifySession call.
-// This function is kept for legacy checks but should be used sparingly.
-export const getCurrentUser = (): User | null => {
-    // This function is now misleading. The source of truth is the backend.
-    // We will keep it for the impersonation logic which is still client-side for now.
-    // In a real app, impersonation would also be a backend-managed state.
-    const token = localStorage.getItem(TOKEN_KEY);
-    // A proper implementation would decode the token here to get user info without a network call.
-    // For simplicity, we'll rely on verifySession to populate user state.
-    // If a token exists, we assume a user might be logged in.
-    return token ? { id: 0, username: '', role: 'User', isSubscribed: false, teamIds: [] } : null; 
-};
-
-
 export const getImpersonator = (): User | null => {
   try {
     const userJson = localStorage.getItem(IMPERSONATOR_KEY);
@@ -114,22 +112,16 @@ export const impersonate = (targetUserId: number): boolean => {
         return false;
     }
     
-    // In a real app, we would request an impersonation token from the backend.
-    // Here, we simulate it by finding the target user and creating a mock token/session.
-    // This is NOT secure and is for demonstration only.
     const targetUser = getAllUsers().find(u => u.id === targetUserId);
      if (!targetUser) {
         console.error("Target user not found.");
         return false;
     }
 
-    // Mocking a login for the target user. We'd get a real token from the backend.
     const mockToken = `mock-token-for-user-${targetUser.id}`;
-    localStorage.setItem(IMPERSONATOR_KEY, JSON.stringify(adminUser)); // Save who is doing the impersonating
-    localStorage.setItem(TOKEN_KEY, mockToken); // Set the "session" to the target user
+    localStorage.setItem(IMPERSONATOR_KEY, JSON.stringify(adminUser));
+    localStorage.setItem(TOKEN_KEY, mockToken);
     
-    // We need to store the target user object somewhere to be retrieved by App.tsx
-    // Storing it in session storage is a temporary solution for this mock.
     sessionStorage.setItem('impersonated_user', JSON.stringify(targetUser));
     
     return true;
@@ -143,11 +135,15 @@ export const stopImpersonation = (): boolean => {
     }
     
     sessionStorage.removeItem('impersonated_user');
-    // We would ask the backend for a new token for the admin user.
-    // For now, we'll just mock it.
+    logout(); // Log out of the impersonated user
+    
+    // Now, log the admin back in. In a real app, you'd have the admin's original token.
+    // Here, we just have to assume they will log in again. This is a limitation of the mock.
+    // To make it smoother, we'll create a new mock token for the admin.
     const mockToken = `mock-token-for-user-${adminUser.id}`;
     localStorage.setItem(TOKEN_KEY, mockToken);
     localStorage.removeItem(IMPERSONATOR_KEY);
+
     return true;
 };
 

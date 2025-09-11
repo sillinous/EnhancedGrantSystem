@@ -5,6 +5,7 @@ import * as trackedGrantService from '../services/trackedGrantService';
 import * as grantStatusService from '../services/grantStatusService';
 import * as checklistService from '../services/checklistService';
 import { Calendar, Edit, Zap, Clock, ChevronRight, PlusCircle } from 'lucide-react';
+import LoadingSpinner from './LoadingSpinner';
 
 interface DashboardProps {
   user: User;
@@ -30,35 +31,46 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     const [inProgressGrants, setInProgressGrants] = useState<GrantOpportunity[]>([]);
     const [upcomingDeadlines, setUpcomingDeadlines] = useState<DeadlineItem[]>([]);
     const [currentAiTip, setCurrentAiTip] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        const trackedGrants = trackedGrantService.getTrackedGrants();
-        const allStatuses = grantStatusService.getAllGrantStatuses();
-        
-        // Filter for in-progress grants
-        const applyingGrants = trackedGrants.filter(grant => {
-            const grantId = getGrantId(grant);
-            return allStatuses[grantId] === 'Applying';
-        });
-        setInProgressGrants(applyingGrants);
+        const fetchData = async () => {
+            try {
+                const trackedGrants = await trackedGrantService.getTrackedGrants();
+                const allStatuses = await grantStatusService.getAllGrantStatuses();
+                
+                // Filter for in-progress grants
+                const applyingGrants = trackedGrants.filter(grant => {
+                    const grantId = getGrantId(grant);
+                    return allStatuses[grantId] === 'Applying';
+                });
+                setInProgressGrants(applyingGrants);
 
-        // Find upcoming deadlines from checklists
-        const deadlines: DeadlineItem[] = [];
-        trackedGrants.forEach(grant => {
-            const checklist = checklistService.getChecklist(grant);
-            const grantDeadlines = checklist
-                .filter(item => item.dueDate && !item.completed)
-                .map(item => ({...item, grantName: grant.name}));
-            deadlines.push(...grantDeadlines);
-        });
+                // Find upcoming deadlines from checklists
+                const deadlines: DeadlineItem[] = [];
+                // This remains synchronous as checklistService is not yet migrated
+                trackedGrants.forEach(grant => {
+                    const checklist = checklistService.getChecklist(grant);
+                    const grantDeadlines = checklist
+                        .filter(item => item.dueDate && !item.completed)
+                        .map(item => ({...item, grantName: grant.name}));
+                    deadlines.push(...grantDeadlines);
+                });
 
-        // Sort deadlines and take the top 5 nearest
-        deadlines.sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
-        setUpcomingDeadlines(deadlines.slice(0, 5));
-        
-        // Select a random AI tip
-        setCurrentAiTip(aiTips[Math.floor(Math.random() * aiTips.length)]);
+                // Sort deadlines and take the top 5 nearest
+                deadlines.sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
+                setUpcomingDeadlines(deadlines.slice(0, 5));
+                
+                // Select a random AI tip
+                setCurrentAiTip(aiTips[Math.floor(Math.random() * aiTips.length)]);
+            } catch (error) {
+                console.error("Failed to load dashboard data:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
 
+        fetchData();
     }, []);
 
     const navigateTo = (path: string) => {
@@ -75,6 +87,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
             <div className="flex-grow">{children}</div>
         </div>
     );
+    
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-gray-50">
+                 <Header user={user} onLogout={onLogout} />
+                 <main className="container mx-auto p-4 md:p-8">
+                    <LoadingSpinner message="Loading your dashboard..." />
+                 </main>
+            </div>
+        )
+    }
 
     return (
         <div className="min-h-screen bg-gray-50">

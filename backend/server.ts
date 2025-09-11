@@ -1,14 +1,31 @@
-// FIX: Import Request, Response, and NextFunction for explicit typing.
-import express, { Request, Response, NextFunction } from 'express';
+// FIX: Aliased Express types to prevent potential namespace conflicts with global types.
+import express, { Request as ExpressRequest, Response as ExpressResponse, NextFunction as ExpressNextFunction } from 'express';
 import cors from 'cors';
-// bodyParser is deprecated; using express.json() instead.
-// import bodyParser from 'body-parser';
 import jwt from 'jsonwebtoken';
-import { User } from '../src/types'; // Assuming types are shared
+import { User, FundingProfile, Team, GrantOpportunity, GrantStatus } from '../src/types'; // Assuming types are shared
+
+// Add 'user' property to Express's Request interface via declaration merging.
+// This is the idiomatic way to handle custom request properties in Express with TypeScript.
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        userId: number;
+        role: string;
+      };
+    }
+  }
+}
 
 const app = express();
 const port = 3001; // Port for the backend server
 const JWT_SECRET = 'your-super-secret-key-that-should-be-in-an-env-file';
+
+// --- Helper Functions ---
+const getGrantId = (grant: GrantOpportunity): string => {
+  return `${grant.name}_${grant.url}`.replace(/[^a-zA-Z0-9]/g, '');
+};
+
 
 // --- Mock Database ---
 const users: User[] = [
@@ -18,88 +35,255 @@ const users: User[] = [
   { id: 4, username: 'teammate@example.com', role: 'User', isSubscribed: false, teamIds: [101] },
 ];
 
+const teams: Team[] = [
+    { 
+      id: 101, 
+      name: 'EcoInnovate Foundation', 
+      members: [
+        { userId: 1, role: 'Editor' },
+        { userId: 2, role: 'Admin' },
+        { userId: 4, role: 'Viewer' },
+      ] 
+    },
+    { 
+      id: 102, 
+      name: 'Pro User\'s Side Project', 
+      members: [{ userId: 2, role: 'Admin' }] 
+    },
+];
+
+let profiles: FundingProfile[] = [
+    {
+        id: 1001,
+        name: 'EcoInnovate Foundation',
+        profileType: 'Non-Profit',
+        industry: 'Environmental Conservation',
+        stage: 'Established',
+        description: 'A non-profit dedicated to funding and supporting projects that address climate change through technological innovation and community action.',
+        fundingNeeds: 'Operational costs, project scaling, research grants for partners',
+        owner: { type: 'team', id: 101 }
+    },
+    {
+        id: 1002,
+        name: 'Aperture Science Labs',
+        profileType: 'Business',
+        industry: 'Scientific Research & Development',
+        stage: 'Growth',
+        description: 'A cutting-edge research firm developing next-generation portal technology and AI assistants.',
+        fundingNeeds: 'R&D for new portal gun, GLaDOS maintenance, facility expansion',
+        owner: { type: 'team', id: 101 }
+    },
+     {
+        id: 1,
+        name: 'Personal Art Project',
+        profileType: 'Individual',
+        industry: 'Digital Art & Media',
+        stage: 'Idea',
+        description: 'A personal project to create a series of interactive digital sculptures exploring the intersection of nature and technology.',
+        fundingNeeds: 'Hardware (VR headset, high-spec PC), software licenses, marketing budget',
+        owner: { type: 'user', id: 1 }
+    }
+];
+
+let trackedGrants: Record<number, GrantOpportunity[]> = { // userId -> grants[]
+    1: [], 2: [], 3: [], 4: [],
+};
+let grantStatuses: Record<number, Record<string, GrantStatus>> = { // userId -> { grantId -> status }
+    1: {}, 2: {}, 3: {}, 4: {},
+};
+
+
 // --- Middleware ---
 app.use(cors()); // Allow requests from our frontend
-// FIX: Replaced deprecated bodyParser.json() with the built-in express.json() middleware.
 app.use(express.json());
 
 // --- API Routes ---
 
 // 1. Authentication
-// FIX: Add explicit types for req and res to resolve type inference issues.
-app.post('/api/auth/login', (req: Request, res: Response) => {
+app.post('/api/auth/login', (req: ExpressRequest, res: ExpressResponse) => {
   const { username, password } = req.body;
-
-  // In a real app, you'd hash the password and compare it to a stored hash.
-  // Here, we're just checking the username.
   const user = users.find(u => u.username === username);
 
   if (user) {
-    // User found, create a JWT
-    const token = jwt.sign(
-      { userId: user.id, role: user.role },
-      JWT_SECRET,
-      { expiresIn: '1h' } // Token expires in 1 hour
-    );
-    
+    const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '8h' });
     res.json({ token, user });
   } else {
     res.status(401).json({ message: 'Invalid credentials' });
   }
 });
 
-// Middleware to verify JWT
-// FIX: Use imported Request, Response, NextFunction types to ensure properties like .headers and .sendStatus are available.
-const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
+// FIX: Changed AuthenticatedRequest to Request. The 'user' property is now available via declaration merging.
+const authenticateToken = (req: ExpressRequest, res: ExpressResponse, next: ExpressNextFunction) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const token = authHeader && authHeader.split(' ')[1];
 
   if (token == null) return res.sendStatus(401);
+  
+  // This is special handling for the client-side impersonation demo.
+  if (token.startsWith('mock-token-for-user-')) {
+    const userId = parseInt(token.replace('mock-token-for-user-', ''));
+    const user = users.find(u => u.id === userId);
+    if (user) {
+        req.user = { userId: user.id, role: user.role };
+        return next();
+    } else {
+        return res.sendStatus(403);
+    }
+  }
 
-  // FIX: Corrected typo from JWT_secret to JWT_SECRET.
   jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-    if (err) return res.sendStatus(403); // Token is no longer valid
-    (req as any).user = user;
+    if (err) return res.sendStatus(403);
+    req.user = user;
     next();
   });
 };
 
 
-// 2. Get current user from token
-// FIX: Add explicit types for req and res to resolve type inference issues.
-app.get('/api/auth/me', (req: Request, res: Response) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+// FIX: Changed AuthenticatedRequest to Request.
+app.get('/api/auth/me', authenticateToken, (req: ExpressRequest, res: ExpressResponse) => {
+    const user = users.find(u => u.id === req.user!.userId);
+    if (user) {
+        res.json({ user });
+    } else {
+        res.status(404).json({ message: 'User not found' });
+    }
+});
 
-    if (token == null) {
-      return res.status(401).json({ message: 'No token provided' });
+// 2. Profiles API (CRUD)
+// FIX: Changed AuthenticatedRequest to Request.
+app.get('/api/profiles', authenticateToken, (req: ExpressRequest, res: ExpressResponse) => {
+    const userId = req.user!.userId;
+    const user = users.find(u => u.id === userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const userProfiles = profiles.filter(p => 
+        (p.owner.type === 'user' && p.owner.id === userId) ||
+        (p.owner.type === 'team' && user.teamIds.includes(p.owner.id))
+    );
+    res.json(userProfiles);
+});
+
+// FIX: Changed AuthenticatedRequest to Request.
+app.post('/api/profiles', authenticateToken, (req: ExpressRequest, res: ExpressResponse) => {
+    const userId = req.user!.userId;
+    const user = users.find(u => u.id === userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const profileData = req.body;
+
+    let owner: FundingProfile['owner'];
+    if (profileData.profileType === 'Individual') {
+        owner = { type: 'user', id: userId };
+    } else {
+        // Default to user's first team if not individual. A real app might have a team selector.
+        const firstTeamId = user.teamIds[0];
+        if (!firstTeamId) {
+            return res.status(400).json({ message: 'You must belong to a team to create a Business or Non-Profit profile.' });
+        }
+        owner = { type: 'team', id: firstTeamId };
+    }
+
+    const newProfile: FundingProfile = {
+        ...profileData,
+        id: Date.now(),
+        owner
+    };
+    profiles.push(newProfile);
+    res.status(201).json(newProfile);
+});
+
+// FIX: Changed AuthenticatedRequest to Request.
+app.put('/api/profiles/:id', authenticateToken, (req: ExpressRequest, res: ExpressResponse) => {
+    const profileId = parseInt(req.params.id);
+    const userId = req.user!.userId;
+    const user = users.find(u => u.id === userId);
+    const updatedData = req.body;
+
+    const profileIndex = profiles.findIndex(p => p.id === profileId);
+    if (profileIndex === -1) return res.status(404).json({ message: 'Profile not found' });
+
+    const profile = profiles[profileIndex];
+    // Security check: user must own the profile or be part of the owning team
+    const isOwner = (profile.owner.type === 'user' && profile.owner.id === userId) ||
+                    (profile.owner.type === 'team' && user?.teamIds.includes(profile.owner.id));
+
+    if (!isOwner && user?.role !== 'Admin') {
+        return res.status(403).json({ message: 'You do not have permission to edit this profile.' });
     }
     
-    // This is part of the client-side impersonation demo.
-    // In a real system, the token itself would be an impersonation token.
-    if (token.startsWith('mock-token-for-user-')) {
-        const userId = parseInt(token.replace('mock-token-for-user-', ''));
-        const user = users.find(u => u.id === userId);
-        if (user) {
-            return res.json({ user });
-        } else {
-            return res.status(404).json({ message: 'Impersonated user not found' });
-        }
+    // Don't allow changing the owner or id via update
+    delete updatedData.id;
+    delete updatedData.owner;
+
+    profiles[profileIndex] = { ...profile, ...updatedData };
+    res.json(profiles[profileIndex]);
+});
+
+// FIX: Changed AuthenticatedRequest to Request.
+app.delete('/api/profiles/:id', authenticateToken, (req: ExpressRequest, res: ExpressResponse) => {
+    const profileId = parseInt(req.params.id);
+    const userId = req.user!.userId;
+    const user = users.find(u => u.id === userId);
+
+    const profileIndex = profiles.findIndex(p => p.id === profileId);
+    if (profileIndex === -1) return res.status(404).json({ message: 'Profile not found' });
+    
+    const profile = profiles[profileIndex];
+    const isOwner = (profile.owner.type === 'user' && profile.owner.id === userId) ||
+                    (profile.owner.type === 'team' && user?.teamIds.includes(profile.owner.id));
+
+    if (!isOwner && user?.role !== 'Admin') {
+        return res.status(403).json({ message: 'You do not have permission to delete this profile.' });
     }
 
-    jwt.verify(token, JWT_SECRET, (err: any, decoded: any) => {
-        if (err) {
-            return res.status(403).json({ message: 'Invalid token' });
-        }
-        
-        const user = users.find(u => u.id === decoded.userId);
-        if (user) {
-            res.json({ user });
-        } else {
-            res.status(404).json({ message: 'User not found' });
-        }
-    });
+    profiles = profiles.filter(p => p.id !== profileId);
+    res.sendStatus(204);
 });
+
+// 3. Grants & Statuses API
+app.get('/api/grants', authenticateToken, (req: ExpressRequest, res: ExpressResponse) => {
+    const userId = req.user!.userId;
+    res.json(trackedGrants[userId] || []);
+});
+
+app.post('/api/grants', authenticateToken, (req: ExpressRequest, res: ExpressResponse) => {
+    const userId = req.user!.userId;
+    const grant = req.body as GrantOpportunity;
+
+    if (!trackedGrants[userId]) {
+        trackedGrants[userId] = [];
+    }
+    if (!grantStatuses[userId]) {
+        grantStatuses[userId] = {};
+    }
+
+    const grantExists = trackedGrants[userId].some(g => g.url === grant.url && g.name === grant.name);
+    if (!grantExists) {
+        trackedGrants[userId].push(grant);
+        const grantId = getGrantId(grant);
+        if (!grantStatuses[userId][grantId]) {
+            grantStatuses[userId][grantId] = 'Interested';
+        }
+    }
+    res.status(201).json(grant);
+});
+
+app.get('/api/grants/statuses', authenticateToken, (req: ExpressRequest, res: ExpressResponse) => {
+    const userId = req.user!.userId;
+    res.json(grantStatuses[userId] || {});
+});
+
+app.put('/api/grants/status', authenticateToken, (req: ExpressRequest, res: ExpressResponse) => {
+    const userId = req.user!.userId;
+    const { grantId, status } = req.body as { grantId: string; status: GrantStatus };
+
+    if (!grantStatuses[userId]) {
+        grantStatuses[userId] = {};
+    }
+    grantStatuses[userId][grantId] = status;
+    res.status(200).json({ grantId, status });
+});
+
 
 
 // --- Start Server ---

@@ -1,29 +1,34 @@
 import { GrantOpportunity } from '../types';
+import { getToken } from './authService';
 
-const TRACKED_GRANTS_KEY = 'grantfinder_tracked_grants';
+const API_URL = 'http://localhost:3001/api';
 
-export const getTrackedGrants = (): GrantOpportunity[] => {
-    try {
-        const grantsJson = localStorage.getItem(TRACKED_GRANTS_KEY);
-        return grantsJson ? JSON.parse(grantsJson) : [];
-    } catch (error) {
-        console.error("Failed to parse tracked grants from localStorage", error);
-        return [];
-    }
+const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    };
 };
 
-const saveTrackedGrants = (grants: GrantOpportunity[]): void => {
-    try {
-        localStorage.setItem(TRACKED_GRANTS_KEY, JSON.stringify(grants));
-    } catch (error) {
-        console.error("Failed to save tracked grants to localStorage", error);
+export const getTrackedGrants = async (): Promise<GrantOpportunity[]> => {
+    const response = await fetch(`${API_URL}/grants`, {
+        headers: getAuthHeaders()
+    });
+    if (!response.ok) {
+        throw new Error('Failed to fetch tracked grants');
     }
+    return response.json();
 };
 
-export const addTrackedGrant = (grantToAdd: GrantOpportunity): void => {
-    const trackedGrants = getTrackedGrants();
-    const grantExists = trackedGrants.some(g => g.url === grantToAdd.url && g.name === grantToAdd.name);
-    if (!grantExists) {
-        saveTrackedGrants([...trackedGrants, grantToAdd]);
+export const addTrackedGrant = async (grantToAdd: GrantOpportunity): Promise<GrantOpportunity> => {
+    const response = await fetch(`${API_URL}/grants`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(grantToAdd)
+    });
+    if (!response.ok) {
+        throw new Error('Failed to add tracked grant');
     }
+    return response.json();
 };

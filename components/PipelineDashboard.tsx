@@ -44,17 +44,28 @@ const PipelineDashboard: React.FC<PipelineDashboardProps> = ({ user, onLogout })
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        const trackedGrants = trackedGrantService.getTrackedGrants();
-        const allStatuses = grantStatusService.getAllGrantStatuses();
-        
-        const grantsWithStatuses = trackedGrants.map(grant => ({
-            ...grant,
-            status: allStatuses[getGrantId(grant)] || 'Interested' as GrantStatus,
-        }));
-        
-        setGrants(grantsWithStatuses);
-        setStats(pipelineService.calculatePipelineStats(trackedGrants, allStatuses));
-        setIsLoading(false);
+        const fetchData = async () => {
+            setIsLoading(true);
+            try {
+                const trackedGrants = await trackedGrantService.getTrackedGrants();
+                const allStatuses = await grantStatusService.getAllGrantStatuses();
+                
+                const grantsWithStatuses = trackedGrants.map(grant => ({
+                    ...grant,
+                    status: allStatuses[getGrantId(grant)] || 'Interested' as GrantStatus,
+                }));
+                
+                setGrants(grantsWithStatuses);
+                setStats(pipelineService.calculatePipelineStats(trackedGrants, allStatuses));
+            } catch (error) {
+                console.error("Failed to load pipeline data", error);
+                // Set an error state to show in the UI
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchData();
     }, []);
 
     const grantsByStatus = useMemo(() => {
@@ -72,7 +83,14 @@ const PipelineDashboard: React.FC<PipelineDashboardProps> = ({ user, onLogout })
     };
 
     if (isLoading) {
-        return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner /></div>;
+        return (
+             <div className="min-h-screen bg-gray-50">
+                <Header user={user} onLogout={onLogout} />
+                <main className="container mx-auto p-4 md:p-8">
+                     <LoadingSpinner message="Loading pipeline data..." />
+                </main>
+             </div>
+        )
     }
 
     return (
