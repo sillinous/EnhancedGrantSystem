@@ -1,43 +1,30 @@
+
 import { CohesionAnalysis, GrantOpportunity } from '../types';
+import { getToken } from './authService';
 
-const COHESION_ANALYSES_KEY = 'grantfinder_cohesionAnalyses';
+const API_URL = 'http://localhost:3001/api';
 
-// Helper to create a consistent, unique key for a grant.
-const getGrantId = (grant: GrantOpportunity): string => {
-  const safeName = grant.name.replace(/[^a-zA-Z0-9]/g, '');
-  const safeUrl = grant.url.replace(/[^a-zA-Z0-9]/g, '');
-  return `grant_${safeName}_${safeUrl}`.slice(0, 75);
+const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    };
 };
 
-const getAllAnalyses = (): Record<string, CohesionAnalysis> => {
-  try {
-    const analysesJson = localStorage.getItem(COHESION_ANALYSES_KEY);
-    return analysesJson ? JSON.parse(analysesJson) : {};
-  } catch (error) {
-    console.error("Failed to parse cohesion analyses from localStorage", error);
-    return {};
-  }
+export const getCohesionAnalysis = async (grantId: string): Promise<CohesionAnalysis | null> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/cohesion`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch cohesion analysis');
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
 };
 
-const saveAllAnalyses = (allAnalyses: Record<string, CohesionAnalysis>): void => {
-  try {
-    localStorage.setItem(COHESION_ANALYSES_KEY, JSON.stringify(allAnalyses));
-  } catch (error) {
-    console.error("Failed to save cohesion analyses to localStorage", error);
-  }
-};
-
-export const getCohesionAnalysis = (grant: GrantOpportunity): CohesionAnalysis | null => {
-  if (!grant) return null;
-  const grantId = getGrantId(grant);
-  const allAnalyses = getAllAnalyses();
-  return allAnalyses[grantId] || null;
-};
-
-export const saveCohesionAnalysis = (grant: GrantOpportunity, analysis: CohesionAnalysis): void => {
-  if (!grant) return;
-  const grantId = getGrantId(grant);
-  const allAnalyses = getAllAnalyses();
-  allAnalyses[grantId] = analysis;
-  saveAllAnalyses(allAnalyses);
+export const saveCohesionAnalysis = async (grantId: string, analysis: Omit<CohesionAnalysis, 'generatedAt'>): Promise<CohesionAnalysis> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/cohesion`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(analysis),
+    });
+    if (!response.ok) throw new Error('Failed to save cohesion analysis');
+    return response.json();
 };

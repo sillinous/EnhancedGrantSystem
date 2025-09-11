@@ -2,8 +2,6 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { FundingProfile, GrantOpportunity, GrantStatus, User, Team, Subscription, CustomRole } from './types';
 import * as authService from './services/authService';
 import * as teamService from './services/teamService';
-import * as subscriptionService from './services/subscriptionService';
-import * as brandingService from './services/brandingService';
 
 import Header from './components/Header';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -22,13 +20,15 @@ import IntelligencePlatform from './components/IntelligencePlatform';
 import PipelineDashboard from './components/PipelineDashboard';
 
 import { BrandingProvider, useBranding } from './contexts/BrandingProvider';
+import { ToastProvider } from './contexts/ToastProvider';
+import ToastContainer from './components/Toast';
 
 const ImpersonationBanner: React.FC = () => {
     const impersonator = authService.getImpersonator();
     if (!impersonator) return null;
 
-    const handleStop = () => {
-        authService.stopImpersonation();
+    const handleStop = async () => {
+        await authService.stopImpersonation();
         window.location.href = '/super-admin';
     };
 
@@ -39,9 +39,29 @@ const ImpersonationBanner: React.FC = () => {
     );
 };
 
-const AuthenticatedApp: React.FC<{ user: User, onLogout: () => void, onSubscriptionChange: (user: User) => void }> = ({ user, onLogout, onSubscriptionChange }) => {
+const AuthenticatedApp: React.FC<{ user: User, onLogout: () => void, onSubscriptionChange: (user: User) => Promise<void> }> = ({ user, onLogout, onSubscriptionChange }) => {
   const [location, setLocation] = useState(window.location.pathname);
-  const { setBranding, resetBranding } = useBranding();
+  const { setBranding } = useBranding();
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [isLoadingTeams, setIsLoadingTeams] = useState(true);
+
+  useEffect(() => {
+      const fetchTeams = async () => {
+          try {
+              const userTeams = await teamService.getTeamsForUser(user.id);
+              setTeams(userTeams);
+              const userPrimaryTeam = userTeams.find(t => t.branding);
+              if (userPrimaryTeam && userPrimaryTeam.branding) {
+                  setBranding(userPrimaryTeam.branding);
+              }
+          } catch (error) {
+              console.error("Failed to fetch user teams:", error);
+          } finally {
+              setIsLoadingTeams(false);
+          }
+      };
+      fetchTeams();
+  }, [user.id, setBranding]);
 
   useEffect(() => {
     const onLocationChange = () => setLocation(window.location.pathname);
@@ -69,6 +89,10 @@ const AuthenticatedApp: React.FC<{ user: User, onLogout: () => void, onSubscript
   
   const grantIdMatch = location.match(/\/grant\/(.+)/);
 
+  if (isLoadingTeams) {
+      return <div className="min-h-screen flex items-center justify-center"><LoadingSpinner message="Loading user data..." /></div>;
+  }
+
   if (location === '/pricing') {
      return <AppContainer><PricingPage user={user} onSubscriptionSuccess={onSubscriptionChange} /></AppContainer>;
   }
@@ -90,9 +114,8 @@ const AuthenticatedApp: React.FC<{ user: User, onLogout: () => void, onSubscript
   if (location.startsWith('/team-hub/')) {
       const teamId = parseInt(location.split('/')[2]);
       if (!isNaN(teamId)) {
-          const team = teamService.getAllTeams().find(t => t.id === teamId);
-          // FIX: The `hasPermission` function was missing from the team service. It has been added to correctly check user roles for team management capabilities.
-          if (team && teamService.hasPermission(user.id, teamId, 'canManageTeam')) {
+          const team = teams.find(t => t.id === teamId);
+          if (team) { // Permission is now checked within TeamHub or on the backend
               return <AppContainer><TeamHub user={user} onLogout={onLogout} teamId={teamId} /></AppContainer>;
           }
       }
@@ -116,14 +139,8 @@ const App: React.FC = () => {
   // Verify session on initial load
   useEffect(() => {
       const verifyUserSession = async () => {
-        // This is special handling for the client-side impersonation demo
-        const impersonatedUserJson = sessionStorage.getItem('impersonated_user');
-        if (impersonatedUserJson) {
-            setCurrentUser(JSON.parse(impersonatedUserJson));
-        } else {
-            const user = await authService.verifySession();
-            setCurrentUser(user);
-        }
+        const user = await authService.verifySession();
+        setCurrentUser(user);
         setIsInitialLoad(false);
       };
       verifyUserSession();
@@ -154,9 +171,9 @@ const App: React.FC = () => {
     setLocation('/dashboard');
   };
   
-  const handleSubscriptionChange = async () => {
-    // Re-verify session to get latest user data from the "backend"
-    const user = await authService.verifySession();
+  const handleSubscriptionChange = async (user: User) => {
+    // The user object is passed up from the child component that initiated the change
+    // This is more efficient than re-verifying the session
     setCurrentUser(user);
   };
 
@@ -176,12 +193,14 @@ const App: React.FC = () => {
   if (currentUser) {
     return (
       <BrandingProvider>
-        <AuthenticatedApp 
-          user={currentUser} 
-          onLogout={handleLogout} 
-          // @ts-ignore - We'll fix this later
-          onSubscriptionChange={handleSubscriptionChange}
-        />
+        <ToastProvider>
+            <ToastContainer />
+            <AuthenticatedApp 
+            user={currentUser} 
+            onLogout={handleLogout} 
+            onSubscriptionChange={handleSubscriptionChange}
+            />
+        </ToastProvider>
       </BrandingProvider>
     );
   }

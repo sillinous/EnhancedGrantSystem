@@ -13,9 +13,11 @@
     "react-dom": "^19.1.0",
     "@google/genai": "^1.7.0",
     "lucide-react": "^0.525.0",
-    "cors": "^2.8.5",
     "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2"
+    "cors": "^2.8.5",
+    "jsonwebtoken": "^9.0.2",
+    "path": "^0.12.7",
+    "fs": "^0.0.1-security"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

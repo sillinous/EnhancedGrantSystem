@@ -4,12 +4,11 @@ import Header from './Header';
 import FeatureGuard from './FeatureGuard';
 import LoadingSpinner from './LoadingSpinner';
 import * as geminiService from '../services/geminiService';
-import * as trendReportService from '../services/trendReportService';
-import * as lessonsLearnedService from '../services/lessonsLearnedService';
 import * as teamService from '../services/teamService';
-import { BarChart3, Search, BrainCircuit, Bot, Lightbulb, TrendingUp, BookCopy, FileClock } from 'lucide-react';
+import * as knowledgeBaseService from '../services/knowledgeBaseService';
+import { useToast } from '../hooks/useToast';
+import { BarChart3, Search, BrainCircuit, Bot, TrendingUp, BookCopy, FileClock, Users } from 'lucide-react';
 
-// Mock data for now
 const mockForecastedGrants: ForecastedGrant[] = [
     { name: 'Future Tech Initiative', funder: 'Innovate Foundation', estimatedReopening: 'Q1 2025', confidence: 'High' },
     { name: 'Arts for All Fund', funder: 'Creative Communities Alliance', estimatedReopening: 'Q4 2024', confidence: 'Medium' },
@@ -18,44 +17,43 @@ const mockForecastedGrants: ForecastedGrant[] = [
 const IntelligencePlatform: React.FC<{ user: User; onLogout: () => void }> = ({ user, onLogout }) => {
     const [activeTab, setActiveTab] = useState('trends');
     const [userTeams, setUserTeams] = useState<Team[]>([]);
+    const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
+    const { showToast } = useToast();
     
     // State for Funding Trends
     const [trendSector, setTrendSector] = useState('Renewable Energy');
     const [trendReport, setTrendReport] = useState<FundingTrendReport | null>(null);
     const [isTrendLoading, setIsTrendLoading] = useState(false);
-    const [trendError, setTrendError] = useState<string | null>(null);
 
     // State for Knowledge Base Search
     const [kbQuery, setKbQuery] = useState('');
     const [kbResult, setKbResult] = useState<SemanticSearchResult | null>(null);
     const [isKbLoading, setIsKbLoading] = useState(false);
-    const [kbError, setKbError] = useState<string | null>(null);
     
     // State for Lessons Learned
     const [lessonsLearnedReport, setLessonsLearnedReport] = useState<LessonsLearnedReport | null>(null);
     const [isLessonsLoading, setIsLessonsLoading] = useState(false);
-    const [lessonsError, setLessonsError] = useState<string | null>(null);
-
-
+    
     useEffect(() => {
-        setUserTeams(teamService.getTeamsForUser(user.id));
-        setTrendReport(trendReportService.getTrendReport(trendSector));
-        if(user.teamIds.length > 0) {
-            setLessonsLearnedReport(lessonsLearnedService.getLessonsLearnedReport(user.teamIds[0]));
-        }
-    }, [user.id, trendSector]);
+        const fetchTeams = async () => {
+            const teams = await teamService.getTeamsForUser(user.id);
+            setUserTeams(teams);
+            if (teams.length > 0) {
+                setSelectedTeamId(teams[0].id);
+            }
+        };
+        fetchTeams();
+    }, [user.id]);
 
     const handleAnalyzeTrends = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsTrendLoading(true);
-        setTrendError(null);
         setTrendReport(null);
         try {
             const report = await geminiService.analyzeFundingTrends(trendSector);
-            trendReportService.saveTrendReport(trendSector, report);
             setTrendReport(report);
         } catch (err) {
-            setTrendError('AI failed to generate trend report. Please try again.');
+            showToast('AI failed to generate trend report. Please try again.', 'error');
         } finally {
             setIsTrendLoading(false);
         }
@@ -63,40 +61,76 @@ const IntelligencePlatform: React.FC<{ user: User; onLogout: () => void }> = ({ 
 
     const handleKbSearch = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!user.teamIds.length) {
-            setKbError("You must be part of a team with a knowledge base to use this feature.");
+        if (!selectedTeamId) {
+            showToast("Please select a team to search their knowledge base.", 'error');
             return;
         }
         setIsKbLoading(true);
-        setKbError(null);
         setKbResult(null);
         try {
-            const result = await geminiService.searchKnowledgeBase(kbQuery, user.teamIds[0]);
+            const result = await geminiService.searchKnowledgeBase(kbQuery, selectedTeamId);
             setKbResult(result);
         } catch (err) {
-            setKbError('AI failed to search the knowledge base. Please try again.');
+            showToast('AI failed to search the knowledge base. Please try again.', 'error');
         } finally {
             setIsKbLoading(false);
         }
     };
     
     const handleGenerateLessons = async () => {
-         if (!user.teamIds.length) {
-            setLessonsError("You must be part of a team to generate a lessons learned report.");
-            return;
-        }
+        if (!selectedTeamId) {
+           showToast("Please select a team to generate a report.", 'error');
+           return;
+       }
         setIsLessonsLoading(true);
-        setLessonsError(null);
         setLessonsLearnedReport(null);
         try {
-            const report = await geminiService.generateLessonsLearned(user.teamIds[0]);
-            lessonsLearnedService.saveLessonsLearnedReport(user.teamIds[0], report);
+            const report = await geminiService.generateLessonsLearned(selectedTeamId);
             setLessonsLearnedReport(report);
         } catch (err) {
-            setLessonsError('AI failed to generate the report. Please try again.');
+            const error = err as Error;
+            showToast(error.message || 'AI failed to generate the report.', 'error');
         } finally {
             setIsLessonsLoading(false);
         }
+    };
+    
+    const KnowledgeBaseGuard: React.FC<{children: React.ReactNode}> = ({children}) => {
+        const [hasDocs, setHasDocs] = useState(true);
+        const [isLoading, setIsLoading] = useState(true);
+
+        useEffect(() => {
+            const checkDocs = async () => {
+                if(selectedTeamId) {
+                    const docs = await knowledgeBaseService.getKnowledgeBaseDocuments(selectedTeamId);
+                    setHasDocs(docs.length > 0);
+                } else {
+                    setHasDocs(false);
+                }
+                setIsLoading(false);
+            };
+            checkDocs();
+        }, [selectedTeamId]);
+
+        if(isLoading) return <LoadingSpinner />;
+        if(!selectedTeamId) {
+            return (
+                <div className="text-center text-gray-500 py-8 border-2 border-dashed rounded-lg">
+                    <Users size={32} className="mx-auto mb-2" />
+                    <p>You must be part of a team to use these features.</p>
+                </div>
+            )
+        }
+        if (!hasDocs) {
+            return (
+                 <div className="text-center text-gray-500 py-8 border-2 border-dashed rounded-lg">
+                    <BookCopy size={32} className="mx-auto mb-2" />
+                    <p>This team's knowledge base is empty.</p>
+                    <p className="text-xs mt-1">An Admin must add past grant documents in the <a href={`/team-hub/${selectedTeamId}`} className="text-primary underline">Team Hub</a> to enable this feature.</p>
+                </div>
+            );
+        }
+        return <>{children}</>;
     };
 
     const TabButton = ({ id, label, icon }: { id: string, label: string, icon: React.ReactNode }) => (
@@ -128,15 +162,21 @@ const IntelligencePlatform: React.FC<{ user: User; onLogout: () => void }> = ({ 
                 </div>
 
                 <FeatureGuard user={user} featureName="Intelligence Platform">
-                    <div className="flex border-b mb-6 gap-2">
-                        <TabButton id="trends" label="Market Intelligence" icon={<BarChart3 size={16} />} />
-                        <TabButton id="kb" label="Knowledge Base Q&A" icon={<Search size={16} />} />
-                        <TabButton id="lessons" label="Performance Analytics" icon={<BrainCircuit size={16} />} />
-                        <TabButton id="forecast" label="Forecasting" icon={<TrendingUp size={16} />} />
+                    <div className="flex items-center justify-between border-b mb-6 gap-2">
+                        <div className="flex gap-2">
+                            <TabButton id="trends" label="Market Intelligence" icon={<BarChart3 size={16} />} />
+                            <TabButton id="kb" label="Knowledge Base Q&A" icon={<Search size={16} />} />
+                            <TabButton id="lessons" label="Performance Analytics" icon={<BrainCircuit size={16} />} />
+                            <TabButton id="forecast" label="Forecasting" icon={<TrendingUp size={16} />} />
+                        </div>
+                        {(activeTab === 'kb' || activeTab === 'lessons') && userTeams.length > 1 && (
+                            <select value={selectedTeamId || ''} onChange={e => setSelectedTeamId(Number(e.target.value))} className="text-sm p-1 border rounded-md">
+                                {userTeams.map(team => <option key={team.id} value={team.id}>{team.name}</option>)}
+                            </select>
+                        )}
                     </div>
 
                     <div className="animate-fade-in">
-                        {/* Market Intelligence Tab */}
                         {activeTab === 'trends' && (
                             <Card title="Funding Trend Analysis" icon={<BarChart3 size={24} />}>
                                 <form onSubmit={handleAnalyzeTrends} className="flex gap-2 mb-4">
@@ -144,7 +184,6 @@ const IntelligencePlatform: React.FC<{ user: User; onLogout: () => void }> = ({ 
                                     <button type="submit" disabled={isTrendLoading} className="px-4 py-2 bg-primary text-white rounded-lg disabled:bg-gray-400">Analyze</button>
                                 </form>
                                 {isTrendLoading && <LoadingSpinner message="Analyzing sector trends..." />}
-                                {trendError && <p className="text-red-500">{trendError}</p>}
                                 {trendReport && (
                                     <div className="space-y-4 text-sm">
                                         <p><strong>Summary:</strong> {trendReport.summary}</p>
@@ -157,56 +196,55 @@ const IntelligencePlatform: React.FC<{ user: User; onLogout: () => void }> = ({ 
                             </Card>
                         )}
                         
-                        {/* Knowledge Base Q&A Tab */}
                         {activeTab === 'kb' && (
                              <Card title="Knowledge Base Q&A" icon={<Search size={24} />}>
-                                 <form onSubmit={handleKbSearch} className="flex gap-2 mb-4">
-                                    <input type="text" value={kbQuery} onChange={e => setKbQuery(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Ask about past proposals, feedback, etc." />
-                                    <button type="submit" disabled={isKbLoading} className="px-4 py-2 bg-primary text-white rounded-lg disabled:bg-gray-400">Ask AI</button>
-                                </form>
-                                {isKbLoading && <LoadingSpinner message="Searching knowledge base..." />}
-                                {kbError && <p className="text-red-500">{kbError}</p>}
-                                {kbResult && (
-                                    <div className="space-y-4 text-sm bg-gray-50 p-4 rounded-lg">
-                                        <p className="font-semibold text-gray-800">{kbResult.answer}</p>
-                                        <div>
-                                            <h4 className="font-bold">Sources:</h4>
-                                            <ul className="list-disc list-inside">
-                                                {kbResult.sources.map(s => <li key={s.documentId}>{s.documentName}</li>)}
-                                            </ul>
+                                 <KnowledgeBaseGuard>
+                                     <form onSubmit={handleKbSearch} className="flex gap-2 mb-4">
+                                        <input type="text" value={kbQuery} onChange={e => setKbQuery(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Ask about past proposals, feedback, etc." />
+                                        <button type="submit" disabled={isKbLoading} className="px-4 py-2 bg-primary text-white rounded-lg disabled:bg-gray-400">Ask AI</button>
+                                    </form>
+                                    {isKbLoading && <LoadingSpinner message="Searching knowledge base..." />}
+                                    {kbResult && (
+                                        <div className="space-y-4 text-sm bg-gray-50 p-4 rounded-lg">
+                                            <p className="font-semibold text-gray-800">{kbResult.answer}</p>
+                                            {kbResult.sources.length > 0 && <div>
+                                                <h4 className="font-bold">Sources:</h4>
+                                                <ul className="list-disc list-inside">
+                                                    {kbResult.sources.map(s => <li key={s.documentId}>{s.documentName}</li>)}
+                                                </ul>
+                                            </div>}
                                         </div>
-                                    </div>
-                                )}
+                                    )}
+                                 </KnowledgeBaseGuard>
                              </Card>
                         )}
 
-                        {/* Performance Analytics Tab */}
                         {activeTab === 'lessons' && (
                             <Card title="Lessons Learned Report" icon={<BrainCircuit size={24} />}>
-                                {!lessonsLearnedReport && !isLessonsLoading && (
-                                    <div className="text-center">
-                                        <p className="mb-4">Analyze your team's past grant outcomes to identify actionable insights for future success.</p>
-                                        <button onClick={handleGenerateLessons} className="px-4 py-2 bg-primary text-white rounded-lg">Generate Report</button>
-                                    </div>
-                                )}
-                                {isLessonsLoading && <LoadingSpinner message="Analyzing past outcomes..." />}
-                                {lessonsError && <p className="text-red-500">{lessonsError}</p>}
-                                {lessonsLearnedReport && (
-                                    <div className="space-y-4 text-sm">
-                                        <p><strong>Summary:</strong> {lessonsLearnedReport.summary}</p>
-                                        {lessonsLearnedReport.findings.map((finding, i) => (
-                                            <div key={i} className="border-t pt-2">
-                                                <p><strong>Theme:</strong> {finding.theme}</p>
-                                                <p><strong>Suggestion:</strong> {finding.suggestion}</p>
-                                            </div>
-                                        ))}
-                                        <p className="text-xs text-gray-400 text-right">Generated: {new Date(lessonsLearnedReport.generatedAt).toLocaleDateString()}</p>
-                                    </div>
-                                )}
+                                <KnowledgeBaseGuard>
+                                    {!lessonsLearnedReport && !isLessonsLoading && (
+                                        <div className="text-center">
+                                            <p className="mb-4">Analyze your team's past grant outcomes to identify actionable insights for future success.</p>
+                                            <button onClick={handleGenerateLessons} className="px-4 py-2 bg-primary text-white rounded-lg">Generate Report</button>
+                                        </div>
+                                    )}
+                                    {isLessonsLoading && <LoadingSpinner message="Analyzing past outcomes..." />}
+                                    {lessonsLearnedReport && (
+                                        <div className="space-y-4 text-sm">
+                                            <p><strong>Summary:</strong> {lessonsLearnedReport.summary}</p>
+                                            {lessonsLearnedReport.findings.map((finding, i) => (
+                                                <div key={i} className="border-t pt-2">
+                                                    <p><strong>Theme:</strong> {finding.theme}</p>
+                                                    <p><strong>Suggestion:</strong> {finding.suggestion}</p>
+                                                </div>
+                                            ))}
+                                            <p className="text-xs text-gray-400 text-right">Generated: {new Date(lessonsLearnedReport.generatedAt).toLocaleDateString()}</p>
+                                        </div>
+                                    )}
+                                </KnowledgeBaseGuard>
                             </Card>
                         )}
                         
-                        {/* Forecasting Tab */}
                          {activeTab === 'forecast' && (
                              <Card title="Forecasted Opportunities" icon={<TrendingUp size={24} />}>
                                  <p className="text-sm text-gray-500 mb-4">AI-powered predictions for grants likely to reopen based on historical data.</p>

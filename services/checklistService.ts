@@ -1,41 +1,47 @@
 
 import { ChecklistItem, GrantOpportunity } from '../types';
+import { getToken } from './authService';
 
-const CHECKLISTS_KEY = 'grantfinder_checklists';
+const API_URL = 'http://localhost:3001/api';
 
-// Helper to create a consistent, unique key for a grant.
-const getGrantId = (grant: GrantOpportunity): string => {
-  const safeName = grant.name.replace(/[^a-zA-Z0-9]/g, '');
-  const safeUrl = grant.url.replace(/[^a-zA-Z0-9]/g, '');
-  return `grant_${safeName}_${safeUrl}`.slice(0, 75); // Slice to avoid overly long keys
+const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    };
 };
 
-const getAllChecklists = (): Record<string, ChecklistItem[]> => {
-  try {
-    const checklistsJson = localStorage.getItem(CHECKLISTS_KEY);
-    return checklistsJson ? JSON.parse(checklistsJson) : {};
-  } catch (error) {
-    console.error("Failed to parse checklists from localStorage", error);
-    return {};
-  }
+export const getChecklist = async (grantId: string): Promise<ChecklistItem[]> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/checklist`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch checklist');
+    return response.json();
 };
 
-export const getChecklist = (grant: GrantOpportunity): ChecklistItem[] => {
-  if (!grant) return [];
-  const grantId = getGrantId(grant);
-  const allChecklists = getAllChecklists();
-  return allChecklists[grantId] || [];
+export const addChecklistItem = async (grantId: string, itemData: { text: string; dueDate?: string }): Promise<ChecklistItem> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/checklist`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(itemData),
+    });
+    if (!response.ok) throw new Error('Failed to add checklist item');
+    return response.json();
 };
 
-export const saveChecklist = (grant: GrantOpportunity, items: ChecklistItem[]): void => {
-  if (!grant) return;
-  try {
-    const grantId = getGrantId(grant);
-    const allChecklists = getAllChecklists();
-    allChecklists[grantId] = items;
-    const checklistsJson = JSON.stringify(allChecklists);
-    localStorage.setItem(CHECKLISTS_KEY, checklistsJson);
-  } catch (error) {
-    console.error("Failed to save checklist to localStorage", error);
-  }
+export const updateChecklistItem = async (grantId: string, item: ChecklistItem): Promise<ChecklistItem> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/checklist/${item.id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(item),
+    });
+    if (!response.ok) throw new Error('Failed to update checklist item');
+    return response.json();
+};
+
+export const deleteChecklistItem = async (grantId: string, itemId: number): Promise<void> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/checklist/${itemId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to delete checklist item');
 };

@@ -1,20 +1,47 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Team } from '../types';
+import { User, Team, Notification } from '../types';
 import * as teamService from '../services/teamService';
-import { LogOut, LayoutDashboard, UserCircle, Search, ChevronDown, Settings, Shield, Users, Star, BookOpen, BrainCircuit, LayoutGrid } from 'lucide-react';
+import * as notificationService from '../services/notificationService';
+import { LogOut, LayoutDashboard, UserCircle, Search, ChevronDown, Settings, Shield, Users, Star, BookOpen, BrainCircuit, LayoutGrid, Bell, MessageSquare, AlertCircle } from 'lucide-react';
 import { useBranding } from '../contexts/BrandingProvider';
+import FeedbackModal from './FeedbackModal';
 
 interface HeaderProps {
   user: User | null;
   onLogout: () => void;
 }
 
+const timeAgo = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    let interval = seconds / 31536000;
+    if (interval > 1) return `${Math.floor(interval)} years ago`;
+    interval = seconds / 2592000;
+    if (interval > 1) return `${Math.floor(interval)} months ago`;
+    interval = seconds / 86400;
+    if (interval > 1) return `${Math.floor(interval)} days ago`;
+    interval = seconds / 3600;
+    if (interval > 1) return `${Math.floor(interval)} hours ago`;
+    interval = seconds / 60;
+    if (interval > 1) return `${Math.floor(interval)} minutes ago`;
+    return `${Math.floor(seconds)} seconds ago`;
+};
+
+
 const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [userTeams, setUserTeams] = useState<Team[]>([]);
   const [teamAdminOf, setTeamAdminOf] = useState<Team[]>([]);
   const { branding } = useBranding();
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  
+  // Notification state
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
+  const notificationRef = useRef<HTMLDivElement>(null);
+
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -22,15 +49,37 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-
   useEffect(() => {
-    if (user) {
-      const allTeams = teamService.getTeamsForUser(user.id);
-      setUserTeams(allTeams);
-      // FIX: The `hasPermission` function was missing from the team service. It has been added to correctly check user roles for team management capabilities.
-      setTeamAdminOf(allTeams.filter(team => teamService.hasPermission(user.id, team.id, 'canManageTeam')));
-    }
+    const fetchData = async () => {
+        if (user) {
+            try {
+                const [allTeams, notifs] = await Promise.all([
+                    teamService.getTeamsForUser(user.id),
+                    notificationService.getNotifications()
+                ]);
+                setUserTeams(allTeams);
+                const adminTeams = allTeams.filter(team => teamService.hasPermission(user.id, team.id, 'canManageTeam'));
+                setTeamAdminOf(adminTeams);
+                setNotifications(notifs);
+            } catch (error) {
+                console.error("Failed to fetch header data:", error);
+            }
+        }
+    };
+    fetchData();
   }, [user]);
+  
+  const unreadCount = notifications.filter(n => !n.isRead).length;
+  
+  const handleNotificationClick = async (notification: Notification) => {
+      // For now, just navigate. A real app might navigate to the specific grant detail view.
+      navigateTo('/pipeline'); 
+      if (!notification.isRead) {
+          await notificationService.markAsRead(notification.id);
+          setNotifications(notifications.map(n => n.id === notification.id ? { ...n, isRead: true } : n));
+      }
+      setIsNotificationMenuOpen(false);
+  };
   
   const navigateTo = (path: string) => {
     window.history.pushState({}, '', path);
@@ -77,19 +126,21 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
       setSearchResults([]);
       setIsSearchOpen(false);
   };
-
-  useEffect(() => {
-      const handleClickOutside = (event: MouseEvent) => {
-          if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-              setIsSearchOpen(false);
-          }
-      };
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-          document.removeEventListener('mousedown', handleClickOutside);
-      };
+  
+   useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setIsSearchOpen(false);
+      }
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setIsNotificationMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
-
 
   const handleProfilesClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -97,6 +148,7 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   };
   
   return (
+    <>
     <header className="bg-white shadow-md sticky top-0 z-50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
@@ -155,7 +207,6 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
             </div>
           ) : (
             <div className="flex items-center gap-6">
-              {/* Main Navigation */}
               <nav className="hidden xl:flex items-center gap-6">
                 <a href="/dashboard" onClick={(e) => { e.preventDefault(); navigateTo('/dashboard'); }} className="flex items-center text-sm font-medium text-gray-600 hover:text-primary transition-colors">
                     <LayoutDashboard size={16} className="mr-1.5" /> Dashboard
@@ -178,6 +229,34 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
               </nav>
 
               <div className="h-6 w-px bg-gray-200 hidden xl:block"></div>
+              
+                {/* Notification Bell */}
+              <div className="relative" ref={notificationRef}>
+                  <button onClick={() => setIsNotificationMenuOpen(prev => !prev)} className="p-2 rounded-full hover:bg-gray-100 text-gray-500 hover:text-primary transition-colors">
+                      <Bell size={20} />
+                      {unreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+                              {unreadCount}
+                          </span>
+                      )}
+                  </button>
+                  {isNotificationMenuOpen && (
+                      <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-xl border z-20 animate-fade-in">
+                          <div className="p-3 border-b font-bold text-gray-700">Notifications</div>
+                          <ul className="max-h-80 overflow-y-auto">
+                              {notifications.length > 0 ? notifications.map(notif => (
+                                  <li key={notif.id} onClick={() => handleNotificationClick(notif)} className={`p-3 border-b hover:bg-gray-50 cursor-pointer ${!notif.isRead ? 'bg-blue-50' : ''}`}>
+                                      <p className="text-sm font-semibold">{notif.grantName}</p>
+                                      <p className="text-xs text-gray-600">{notif.message}</p>
+                                      <p className="text-xs text-gray-400 mt-1">{timeAgo(notif.createdAt)}</p>
+                                  </li>
+                              )) : (
+                                  <li className="p-4 text-sm text-center text-gray-500">No new notifications.</li>
+                              )}
+                          </ul>
+                      </div>
+                  )}
+              </div>
 
               {/* User Menu */}
               <div className="relative">
@@ -241,6 +320,9 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
                       </div>
                     )}
                     <div className="p-1 border-t">
+                      <button onClick={() => { setIsUserMenuOpen(false); setIsFeedbackModalOpen(true); }} className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md">
+                        <MessageSquare size={16} /> Provide Feedback
+                      </button>
                       <button onClick={()=>{setIsUserMenuOpen(false); onLogout();}} className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-md">
                         <LogOut size={16} /> Logout
                       </button>
@@ -253,6 +335,8 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
         </div>
       </div>
     </header>
+    <FeedbackModal isOpen={isFeedbackModalOpen} onClose={() => setIsFeedbackModalOpen(false)} />
+    </>
   );
 };
 

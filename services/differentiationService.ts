@@ -1,43 +1,30 @@
+
 import { DifferentiationAnalysis, GrantOpportunity } from '../types';
+import { getToken } from './authService';
 
-const DIFFERENTIATION_ANALYSES_KEY = 'grantfinder_differentiationAnalyses';
+const API_URL = 'http://localhost:3001/api';
 
-// Helper to create a consistent, unique key for a grant.
-const getGrantId = (grant: GrantOpportunity): string => {
-  const safeName = grant.name.replace(/[^a-zA-Z0-9]/g, '');
-  const safeUrl = grant.url.replace(/[^a-zA-Z0-9]/g, '');
-  return `grant_${safeName}_${safeUrl}`.slice(0, 75);
+const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    };
 };
 
-const getAllAnalyses = (): Record<string, DifferentiationAnalysis> => {
-  try {
-    const analysesJson = localStorage.getItem(DIFFERENTIATION_ANALYSES_KEY);
-    return analysesJson ? JSON.parse(analysesJson) : {};
-  } catch (error) {
-    console.error("Failed to parse differentiation analyses from localStorage", error);
-    return {};
-  }
+export const getDifferentiationAnalysis = async (grantId: string): Promise<DifferentiationAnalysis | null> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/differentiation`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch differentiation analysis');
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
 };
 
-const saveAllAnalyses = (allAnalyses: Record<string, DifferentiationAnalysis>): void => {
-  try {
-    localStorage.setItem(DIFFERENTIATION_ANALYSES_KEY, JSON.stringify(allAnalyses));
-  } catch (error) {
-    console.error("Failed to save differentiation analyses to localStorage", error);
-  }
-};
-
-export const getDifferentiationAnalysis = (grant: GrantOpportunity): DifferentiationAnalysis | null => {
-  if (!grant) return null;
-  const grantId = getGrantId(grant);
-  const allAnalyses = getAllAnalyses();
-  return allAnalyses[grantId] || null;
-};
-
-export const saveDifferentiationAnalysis = (grant: GrantOpportunity, analysis: DifferentiationAnalysis): void => {
-  if (!grant) return;
-  const grantId = getGrantId(grant);
-  const allAnalyses = getAllAnalyses();
-  allAnalyses[grantId] = analysis;
-  saveAllAnalyses(allAnalyses);
+export const saveDifferentiationAnalysis = async (grantId: string, analysis: Omit<DifferentiationAnalysis, 'generatedAt'>): Promise<DifferentiationAnalysis> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/differentiation`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(analysis),
+    });
+    if (!response.ok) throw new Error('Failed to save differentiation analysis');
+    return response.json();
 };

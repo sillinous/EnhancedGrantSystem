@@ -1,44 +1,30 @@
+
 import { SuccessPatternAnalysis, GrantOpportunity } from '../types';
+import { getToken } from './authService';
 
-const SUCCESS_PATTERNS_KEY = 'grantfinder_successPatterns';
+const API_URL = 'http://localhost:3001/api';
 
-// Helper to create a consistent, unique key for a grant.
-const getGrantId = (grant: GrantOpportunity): string => {
-  const safeName = grant.name.replace(/[^a-zA-Z0-9]/g, '');
-  const safeUrl = grant.url.replace(/[^a-zA-Z0-9]/g, '');
-  return `grant_${safeName}_${safeUrl}`.slice(0, 75);
+const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    };
 };
 
-
-const getAllSuccessPatternAnalyses = (): Record<string, SuccessPatternAnalysis> => {
-  try {
-    const analysesJson = localStorage.getItem(SUCCESS_PATTERNS_KEY);
-    return analysesJson ? JSON.parse(analysesJson) : {};
-  } catch (error) {
-    console.error("Failed to parse success pattern analyses from localStorage", error);
-    return {};
-  }
+export const getSuccessPatternAnalysis = async (grantId: string): Promise<SuccessPatternAnalysis | null> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/success-patterns`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch success pattern analysis');
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
 };
 
-const saveAllSuccessPatternAnalyses = (allAnalyses: Record<string, SuccessPatternAnalysis>): void => {
-  try {
-    localStorage.setItem(SUCCESS_PATTERNS_KEY, JSON.stringify(allAnalyses));
-  } catch (error) {
-    console.error("Failed to save success pattern analyses to localStorage", error);
-  }
-};
-
-export const getSuccessPatternAnalysis = (grant: GrantOpportunity): SuccessPatternAnalysis | null => {
-  if (!grant) return null;
-  const grantId = getGrantId(grant);
-  const allAnalyses = getAllSuccessPatternAnalyses();
-  return allAnalyses[grantId] || null;
-};
-
-export const saveSuccessPatternAnalysis = (grant: GrantOpportunity, analysis: SuccessPatternAnalysis): void => {
-  if (!grant) return;
-  const grantId = getGrantId(grant);
-  const allAnalyses = getAllSuccessPatternAnalyses();
-  allAnalyses[grantId] = analysis;
-  saveAllSuccessPatternAnalyses(allAnalyses);
+export const saveSuccessPatternAnalysis = async (grantId: string, analysis: Omit<SuccessPatternAnalysis, 'generatedAt'>): Promise<SuccessPatternAnalysis> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/success-patterns`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(analysis),
+    });
+    if (!response.ok) throw new Error('Failed to save success pattern analysis');
+    return response.json();
 };

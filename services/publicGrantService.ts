@@ -1,4 +1,3 @@
-
 import { PublicGrant } from '../types';
 
 const featuredGrants: PublicGrant[] = [

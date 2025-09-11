@@ -1,54 +1,34 @@
 
 import { ActivityLog, GrantOpportunity, User } from '../types';
+import { getToken } from './authService';
 
-const ACTIVITY_LOG_KEY = 'grantfinder_activityLog';
+const API_URL = 'http://localhost:3001/api';
 
-// Helper to create a consistent, unique key for a grant.
-const getGrantId = (grant: GrantOpportunity): string => {
-  const safeName = grant.name.replace(/[^a-zA-Z0-9]/g, '');
-  const safeUrl = grant.url.replace(/[^a-zA-Z0-9]/g, '');
-  return `grant_${safeName}_${safeUrl}`.slice(0, 75);
+const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    };
 };
 
-const getAllLogs = (): Record<string, ActivityLog[]> => {
-  try {
-    const logsJson = localStorage.getItem(ACTIVITY_LOG_KEY);
-    return logsJson ? JSON.parse(logsJson) : {};
-  } catch (error) {
-    console.error("Failed to parse activity logs from localStorage", error);
-    return {};
-  }
+export const getActivitiesForGrant = async (grantId: string): Promise<ActivityLog[]> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/activity`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch activities');
+    return response.json();
 };
 
-const saveAllLogs = (allLogs: Record<string, ActivityLog[]>): void => {
-  try {
-    localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(allLogs));
-  } catch (error) {
-    console.error("Failed to save activity logs to localStorage", error);
-  }
-};
-
-export const getActivitiesForGrant = (grant: GrantOpportunity): ActivityLog[] => {
-  if (!grant) return [];
-  const grantId = getGrantId(grant);
-  const allLogs = getAllLogs();
-  return (allLogs[grantId] || []).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-};
-
-export const logActivity = (grant: GrantOpportunity, user: User, action: string): void => {
-  if (!grant || !user) return;
-  const grantId = getGrantId(grant);
-  const allLogs = getAllLogs();
-  const grantLogs = allLogs[grantId] || [];
-
-  const newLog: ActivityLog = {
-    id: Date.now(),
-    timestamp: new Date().toISOString(),
-    username: user.username,
-    userId: user.id,
-    action,
-  };
-
-  allLogs[grantId] = [newLog, ...grantLogs];
-  saveAllLogs(allLogs);
+export const logActivity = async (grantId: string, user: User, action: string): Promise<ActivityLog> => {
+    const logData = {
+        username: user.username,
+        userId: user.id,
+        action,
+    };
+    const response = await fetch(`${API_URL}/grants/${grantId}/activity`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(logData),
+    });
+    if (!response.ok) throw new Error('Failed to log activity');
+    return response.json();
 };

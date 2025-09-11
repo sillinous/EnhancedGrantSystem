@@ -47,6 +47,11 @@ export const getTeamsForUser = (userId: number): Team[] => {
     return allTeams.filter(team => team.members.some(m => m.userId === userId));
 };
 
+export const getTeamById = (teamId: number): Team | null => {
+    const allTeams = getAllTeams();
+    return allTeams.find(t => t.id === teamId) || null;
+};
+
 export const getUserRoleInTeam = (userId: number, teamId: number): TeamRole | null => {
     const allTeams = getAllTeams();
     const team = allTeams.find(t => t.id === teamId);

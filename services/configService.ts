@@ -1,4 +1,3 @@
-
 import { AppConfig, MonetizationModel } from '../types';
 
 const APP_CONFIG_KEY = 'grantfinder_appConfig';

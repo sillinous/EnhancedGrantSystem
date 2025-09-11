@@ -1,13 +1,16 @@
-
 import { SourcingAgent } from '../types';
 
 const SOURCING_AGENTS_KEY = 'grantfinder_sourcingAgents';
 
 const defaultAgents: SourcingAgent[] = [
-  { id: 'agent_1', name: 'Global Climate Tech Agent', sector: 'Renewable Energy, Sustainability, Conservation', status: 'Active' },
-  { id: 'agent_2', name: 'European Arts & Culture Agent', sector: 'Fine Arts, Performing Arts, Heritage Projects', status: 'Active' },
-  { id: 'agent_3', name: 'North American Small Business Agent', sector: 'Startups, Local Businesses, Innovation', status: 'Active' },
-  { id: 'agent_4', name: 'Global Health Initiatives Agent', sector: 'Medical Research, Public Health, Wellness', status: 'Active' },
+  // FIX: Added missing 'profileId' property to satisfy the SourcingAgent type.
+  { id: 1, profileId: 1001, name: 'Global Climate Tech Agent', sector: 'Renewable Energy, Sustainability, Conservation', status: 'Active' },
+  // FIX: Added missing 'profileId' property to satisfy the SourcingAgent type.
+  { id: 2, profileId: 1001, name: 'European Arts & Culture Agent', sector: 'Fine Arts, Performing Arts, Heritage Projects', status: 'Active' },
+  // FIX: Added missing 'profileId' property to satisfy the SourcingAgent type.
+  { id: 3, profileId: 1001, name: 'North American Small Business Agent', sector: 'Startups, Local Businesses, Innovation', status: 'Active' },
+  // FIX: Added missing 'profileId' property to satisfy the SourcingAgent type.
+  { id: 4, profileId: 1001, name: 'Global Health Initiatives Agent', sector: 'Medical Research, Public Health, Wellness', status: 'Active' },
 ];
 
 export const getAgents = (): SourcingAgent[] => {

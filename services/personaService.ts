@@ -1,44 +1,30 @@
+
 import { FunderPersona, GrantOpportunity } from '../types';
+import { getToken } from './authService';
 
-const PERSONAS_KEY = 'grantfinder_personas';
+const API_URL = 'http://localhost:3001/api';
 
-// Helper to create a consistent, unique key for a grant.
-const getGrantId = (grant: GrantOpportunity): string => {
-  const safeName = grant.name.replace(/[^a-zA-Z0-9]/g, '');
-  const safeUrl = grant.url.replace(/[^a-zA-Z0-9]/g, '');
-  return `grant_${safeName}_${safeUrl}`.slice(0, 75);
+const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    };
 };
 
-
-const getAllPersonas = (): Record<string, FunderPersona> => {
-  try {
-    const personasJson = localStorage.getItem(PERSONAS_KEY);
-    return personasJson ? JSON.parse(personasJson) : {};
-  } catch (error) {
-    console.error("Failed to parse funder personas from localStorage", error);
-    return {};
-  }
+export const getPersona = async (grantId: string): Promise<FunderPersona | null> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/persona`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch persona');
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
 };
 
-const saveAllPersonas = (allPersonas: Record<string, FunderPersona>): void => {
-  try {
-    localStorage.setItem(PERSONAS_KEY, JSON.stringify(allPersonas));
-  } catch (error) {
-    console.error("Failed to save funder personas to localStorage", error);
-  }
-};
-
-export const getPersona = (grant: GrantOpportunity): FunderPersona | null => {
-  if (!grant) return null;
-  const grantId = getGrantId(grant);
-  const allPersonas = getAllPersonas();
-  return allPersonas[grantId] || null;
-};
-
-export const savePersona = (grant: GrantOpportunity, persona: FunderPersona): void => {
-  if (!grant) return;
-  const grantId = getGrantId(grant);
-  const allPersonas = getAllPersonas();
-  allPersonas[grantId] = persona;
-  saveAllPersonas(allPersonas);
+export const savePersona = async (grantId: string, persona: Omit<FunderPersona, 'generatedAt'>): Promise<FunderPersona> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/persona`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(persona),
+    });
+    if (!response.ok) throw new Error('Failed to save persona');
+    return response.json();
 };

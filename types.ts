@@ -175,7 +175,8 @@ export interface ImpactStory {
 }
 
 export interface SourcingAgent {
-  id: string;
+  id: number;
+  profileId: number;
   name: string;
   sector: string;
   status: 'Active' | 'Idle';
@@ -211,7 +212,6 @@ export interface Subscription {
 
 export interface TeamMember {
     userId: number;
-    // FIX: Changed from `roleId` to `role` to match the actual implementation in `teamService`.
     role: TeamRole;
 }
 
@@ -219,7 +219,6 @@ export interface Team {
     id: number;
     name: string;
     members: TeamMember[];
-    // FIX: Made `customRoles` optional as it is not present in the mock data.
     customRoles?: CustomRole[];
     ssoConfig?: {
       provider: SSOProvider;
@@ -339,4 +338,21 @@ export interface PipelineStats {
     totalPipeline: number;
     totalAwardedYTD: number;
     successRate: number;
+}
+
+// --- UI Specific Types ---
+export interface ToastMessage {
+  id: number;
+  message: string;
+  type: 'success' | 'error' | 'info';
+  icon?: React.ReactNode;
+}
+
+export interface Notification {
+  id: number;
+  message: string;
+  grantName: string;
+  grantUrl: string;
+  isRead: boolean;
+  createdAt: string;
 }

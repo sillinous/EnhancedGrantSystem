@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { User, GrantOpportunity, ChecklistItem, GrantStatus } from '../types';
+import { User, GrantOpportunity, ChecklistItem, GrantStatus, Notification } from '../types';
 import Header from './Header';
+import OnboardingModal from './OnboardingModal';
 import * as trackedGrantService from '../services/trackedGrantService';
 import * as grantStatusService from '../services/grantStatusService';
 import * as checklistService from '../services/checklistService';
-import { Calendar, Edit, Zap, Clock, ChevronRight, PlusCircle } from 'lucide-react';
+import * as profileService from '../services/profileService';
+import * as notificationService from '../services/notificationService';
+import { Calendar, Edit, Zap, Clock, ChevronRight, PlusCircle, Bell } from 'lucide-react';
 import LoadingSpinner from './LoadingSpinner';
 
 interface DashboardProps {
@@ -30,38 +33,48 @@ const aiTips = [
 const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     const [inProgressGrants, setInProgressGrants] = useState<GrantOpportunity[]>([]);
     const [upcomingDeadlines, setUpcomingDeadlines] = useState<DeadlineItem[]>([]);
+    const [newOpportunities, setNewOpportunities] = useState<Notification[]>([]);
     const [currentAiTip, setCurrentAiTip] = useState('');
     const [isLoading, setIsLoading] = useState(true);
+    const [isNewUser, setIsNewUser] = useState(false);
+    const [isOboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const trackedGrants = await trackedGrantService.getTrackedGrants();
-                const allStatuses = await grantStatusService.getAllGrantStatuses();
+                const [
+                    trackedGrants, 
+                    allStatuses, 
+                    profiles,
+                    notifications
+                ] = await Promise.all([
+                    trackedGrantService.getTrackedGrants(),
+                    grantStatusService.getAllGrantStatuses(),
+                    profileService.getProfiles(),
+                    notificationService.getNotifications()
+                ]);
+
+                if (profiles.length === 0) {
+                    setIsNewUser(true);
+                    setIsOnboardingModalOpen(true);
+                }
                 
-                // Filter for in-progress grants
-                const applyingGrants = trackedGrants.filter(grant => {
-                    const grantId = getGrantId(grant);
-                    return allStatuses[grantId] === 'Applying';
-                });
+                const applyingGrants = trackedGrants.filter(grant => allStatuses[getGrantId(grant)] === 'Applying');
                 setInProgressGrants(applyingGrants);
 
-                // Find upcoming deadlines from checklists
-                const deadlines: DeadlineItem[] = [];
-                // This remains synchronous as checklistService is not yet migrated
-                trackedGrants.forEach(grant => {
-                    const checklist = checklistService.getChecklist(grant);
-                    const grantDeadlines = checklist
+                const deadlinePromises = trackedGrants.map(async (grant) => {
+                    const checklist = await checklistService.getChecklist(getGrantId(grant));
+                    return checklist
                         .filter(item => item.dueDate && !item.completed)
-                        .map(item => ({...item, grantName: grant.name}));
-                    deadlines.push(...grantDeadlines);
+                        .map(item => ({ ...item, grantName: grant.name }));
                 });
 
-                // Sort deadlines and take the top 5 nearest
+                const nestedDeadlines = await Promise.all(deadlinePromises);
+                const deadlines = nestedDeadlines.flat();
                 deadlines.sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
                 setUpcomingDeadlines(deadlines.slice(0, 5));
                 
-                // Select a random AI tip
+                setNewOpportunities(notifications.filter(n => !n.isRead).slice(0, 5));
                 setCurrentAiTip(aiTips[Math.floor(Math.random() * aiTips.length)]);
             } catch (error) {
                 console.error("Failed to load dashboard data:", error);
@@ -98,10 +111,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
             </div>
         )
     }
+    
+    if (isNewUser) {
+        return (
+            <div className="min-h-screen bg-gray-50">
+                 <Header user={user} onLogout={onLogout} />
+                 <main className="container mx-auto p-4 md:p-8 text-center">
+                    <div className="max-w-md mx-auto mt-10 p-8 bg-white rounded-xl shadow-lg border">
+                        <Zap size={40} className="mx-auto text-primary mb-4" />
+                        <h2 className="text-2xl font-bold text-gray-800">Welcome to GrantFinder AI!</h2>
+                        <p className="text-gray-600 mt-2">Let's find the perfect funding for your project. Create a profile to get started.</p>
+                        <button onClick={() => navigateTo('/app')} className="mt-6 w-full flex items-center justify-center text-sm font-medium text-white bg-primary px-4 py-3 rounded-full hover:bg-blue-700 transition-colors">
+                            <PlusCircle size={16} className="mr-2" />
+                            Create Your First Funding Profile
+                        </button>
+                    </div>
+                 </main>
+                 <OnboardingModal isOpen={isOboardingModalOpen} onClose={() => setIsOnboardingModalOpen(false)} />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gray-50">
-            {/* FIX: Removed unsupported `isPublic` prop. */}
             <Header user={user} onLogout={onLogout} />
             <main className="container mx-auto p-4 md:p-8">
                 <div className="mb-8">
@@ -110,9 +142,26 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* In-Progress Applications */}
-                    <div className="lg:col-span-2">
-                        <Widget title="In-Progress Applications" icon={<Edit size={24} />}>
+                    {/* New Opportunities */}
+                    <Widget title="New Opportunities" icon={<Bell size={24} />}>
+                           {newOpportunities.length > 0 ? (
+                                <ul className="space-y-3">
+                                    {newOpportunities.map(notif => (
+                                        <li key={notif.id} className="p-3 border rounded-lg group hover:border-primary/50 transition-colors">
+                                           <p className="font-semibold text-gray-800 text-sm">{notif.grantName}</p>
+                                           <p className="text-xs text-gray-500">{notif.message}</p>
+                                        </li>
+                                    ))}
+                                </ul>
+                           ) : (
+                                <div className="text-center text-gray-500 py-8 h-full flex flex-col justify-center items-center">
+                                    <p className="mb-2 text-sm">Your AI Scouts are working. New opportunities will appear here.</p>
+                                </div>
+                           )}
+                    </Widget>
+                    
+                     {/* In-Progress Applications */}
+                    <Widget title="In-Progress Applications" icon={<Edit size={24} />}>
                            {inProgressGrants.length > 0 ? (
                                 <ul className="space-y-3">
                                     {inProgressGrants.map(grant => (
@@ -121,7 +170,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                                                 <p className="font-semibold text-gray-800">{grant.name}</p>
                                                 <p className="text-sm text-gray-500">{grant.fundingAmount}</p>
                                             </div>
-                                            <button onClick={() => navigateTo('/app')} className="text-sm font-medium text-primary hover:underline flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => navigateTo('/pipeline')} className="text-sm font-medium text-primary hover:underline flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                 View <ChevronRight size={16} />
                                             </button>
                                         </li>
@@ -136,8 +185,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                                     </button>
                                 </div>
                            )}
-                        </Widget>
-                    </div>
+                    </Widget>
 
                     {/* AI Tip of the Day */}
                     <Widget title="AI Strategy Tip" icon={<Zap size={24} />}>
@@ -175,6 +223,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                     </div>
                 </div>
             </main>
+            <OnboardingModal isOpen={isOboardingModalOpen} onClose={() => setIsOnboardingModalOpen(false)} />
         </div>
     );
 };

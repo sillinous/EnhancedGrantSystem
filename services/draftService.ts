@@ -1,74 +1,47 @@
+
 import { GrantDraft, GrantOpportunity, Comment } from '../types';
+import { getToken } from './authService';
 
-const DRAFTS_KEY = 'grantfinder_drafts';
+const API_URL = 'http://localhost:3001/api';
 
-// Helper to create a consistent, unique key for a grant.
-const getGrantId = (grant: GrantOpportunity): string => {
-  const safeName = grant.name.replace(/[^a-zA-Z0-9]/g, '');
-  const safeUrl = grant.url.replace(/[^a-zA-Z0-9]/g, '');
-  return `grant_${safeName}_${safeUrl}`.slice(0, 75);
+const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    };
 };
 
-const getAllDrafts = (): Record<string, GrantDraft[]> => {
-  try {
-    const draftsJson = localStorage.getItem(DRAFTS_KEY);
-    return draftsJson ? JSON.parse(draftsJson) : {};
-  } catch (error) {
-    console.error("Failed to parse drafts from localStorage", error);
-    return {};
-  }
+export const getDrafts = async (grantId: string): Promise<GrantDraft[]> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/drafts`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch drafts');
+    return response.json();
 };
 
-const saveAllDrafts = (allDrafts: Record<string, GrantDraft[]>): void => {
-  try {
-    localStorage.setItem(DRAFTS_KEY, JSON.stringify(allDrafts));
-  } catch (error) {
-    console.error("Failed to save drafts to localStorage", error);
-  }
+export const addDraft = async (grantId: string, draftData: { section: string; content: string }): Promise<GrantDraft> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/drafts`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(draftData),
+    });
+    if (!response.ok) throw new Error('Failed to add draft');
+    return response.json();
 };
 
-export const getDrafts = (grant: GrantOpportunity): GrantDraft[] => {
-  if (!grant) return [];
-  const grantId = getGrantId(grant);
-  const allDrafts = getAllDrafts();
-  return allDrafts[grantId] || [];
+export const updateDraft = async (grantId: string, updatedDraft: GrantDraft): Promise<GrantDraft> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/drafts/${updatedDraft.id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(updatedDraft),
+    });
+    if (!response.ok) throw new Error('Failed to update draft');
+    return response.json();
 };
 
-export const addDraft = (grant: GrantOpportunity, draftData: { section: string; content: string }): void => {
-  if (!grant) return;
-  const grantId = getGrantId(grant);
-  const allDrafts = getAllDrafts();
-  const grantDrafts = allDrafts[grantId] || [];
-
-  const newDraft: GrantDraft = {
-    id: Date.now(),
-    grantId,
-    ...draftData,
-    createdAt: new Date().toISOString(),
-    status: 'Draft',
-    // FIX: Add missing `comments` property to satisfy the GrantDraft type.
-    comments: [],
-  };
-
-  allDrafts[grantId] = [...grantDrafts, newDraft];
-  saveAllDrafts(allDrafts);
-};
-
-export const updateDraft = (grant: GrantOpportunity, updatedDraft: GrantDraft): void => {
-  if (!grant) return;
-  const grantId = getGrantId(grant);
-  const allDrafts = getAllDrafts();
-  let grantDrafts = allDrafts[grantId] || [];
-  grantDrafts = grantDrafts.map(d => d.id === updatedDraft.id ? updatedDraft : d);
-  allDrafts[grantId] = grantDrafts;
-  saveAllDrafts(allDrafts);
-};
-
-export const deleteDraft = (grant: GrantOpportunity, draftId: number): void => {
-  if (!grant) return;
-  const grantId = getGrantId(grant);
-  const allDrafts = getAllDrafts();
-  let grantDrafts = allDrafts[grantId] || [];
-  allDrafts[grantId] = grantDrafts.filter(d => d.id !== draftId);
-  saveAllDrafts(allDrafts);
+export const deleteDraft = async (grantId: string, draftId: number): Promise<void> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/drafts/${draftId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to delete draft');
 };

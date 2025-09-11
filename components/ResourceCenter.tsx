@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import Header from './Header';
 import { setMetaTags } from '../services/seoService';

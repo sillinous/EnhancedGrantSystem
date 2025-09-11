@@ -9,15 +9,14 @@ import Header from './Header';
 import ProfileSelection from './ProfileSelection';
 import OpportunitiesDashboard from './OpportunitiesDashboard';
 import LoadingSpinner from './LoadingSpinner';
-import ErrorDisplay from './ErrorDisplay';
 import Modal from './Modal';
 import TeamManager from './TeamManager';
+import { useToast } from '../hooks/useToast';
 import { ArrowLeft } from 'lucide-react';
 
 interface MainAppProps {
   user: User;
   onLogout: () => void;
-  // This prop is passed down from App.tsx but not used here, included for type consistency
   onSubscriptionChange: (user: User) => void;
 }
 
@@ -35,18 +34,17 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [profileToEdit, setProfileToEdit] = useState<FundingProfile | null>(null);
   const [isTeamManagerOpen, setIsTeamManagerOpen] = useState(false);
+  const { showToast } = useToast();
 
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
-    setError(null);
     try {
         const [userProfiles, userTeams, allStatuses] = await Promise.all([
             profileService.getProfiles(),
-            Promise.resolve(teamService.getTeamsForUser(user.id)), // Keep team service local for now
+            teamService.getTeamsForUser(user.id),
             grantStatusService.getAllGrantStatuses()
         ]);
         setProfiles(userProfiles);
@@ -54,11 +52,11 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
         setGrantStatuses(allStatuses);
     } catch (err) {
         console.error(err);
-        setError("Failed to load your data. Please try refreshing the page.");
+        showToast("Failed to load your data. Please try refreshing the page.", 'error');
     } finally {
         setIsLoading(false);
     }
-  }, [user.id]);
+  }, [user.id, showToast]);
 
   useEffect(() => {
     loadData();
@@ -66,7 +64,6 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
   
   const handleProfileSelect = async (profile: FundingProfile) => {
     setIsSearching(true);
-    setError(null);
     setSelectedProfile(profile);
     try {
       const result = await geminiService.findGrants(profile);
@@ -77,7 +74,7 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
       await Promise.all(addPromises);
     } catch (e) {
       console.error(e);
-      setError("The AI couldn't find grants for this profile. The service may be busy. Please try again later.");
+      showToast("The AI couldn't find grants for this profile. The service may be busy. Please try again later.", 'error');
       setSelectedProfile(null);
     } finally {
       setIsSearching(false);
@@ -86,7 +83,6 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
 
   const handleCreateOrUpdateProfile = async (profileData: Omit<FundingProfile, 'id' | 'owner'>, id?: number) => {
     setIsSaving(true);
-    setError(null);
     
     let profileToSearch: FundingProfile | null = null;
 
@@ -95,13 +91,15 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
             const existingProfile = profiles.find(p => p.id === id);
             if (!existingProfile) throw new Error("Profile not found");
             const updatedProfile = { ...existingProfile, ...profileData };
-            await profileService.updateProfile(updatedProfile);
-            profileToSearch = updatedProfile;
+            profileToSearch = await profileService.updateProfile(updatedProfile);
+            showToast('Profile updated successfully!', 'success');
         } else { // Create
-            await profileService.addProfile(profileData);
+            const newProfile = await profileService.addProfile(profileData);
+            profileToSearch = newProfile;
+            showToast('Profile created successfully! The AI is now searching for grants.', 'success');
         }
     } catch (err) {
-        setError("Failed to save the profile. Please try again.");
+        showToast("Failed to save the profile. Please try again.", 'error');
         console.error(err);
     } finally {
         setProfileToEdit(null);
@@ -119,8 +117,9 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
         try {
             await profileService.deleteProfile(profileId);
             await loadData();
+            showToast('Profile deleted.', 'success');
         } catch (err) {
-            setError("Failed to delete profile.");
+            showToast("Failed to delete profile.", 'error');
             console.error(err);
         }
     }
@@ -128,16 +127,14 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
   
   const handleStatusChange = async (grant: GrantOpportunity, status: GrantStatus) => {
       const grantId = getGrantId(grant);
-      // Optimistic UI update
+      const originalStatuses = { ...grantStatuses };
       setGrantStatuses(prev => ({...prev, [grantId]: status}));
       try {
           await grantStatusService.saveGrantStatus(grantId, status);
       } catch (e) {
           console.error("Failed to update status on server:", e);
-          // Rollback
-          const allStatuses = await grantStatusService.getAllGrantStatuses();
-          setGrantStatuses(allStatuses);
-          setError("Failed to update grant status. Please try again.");
+          setGrantStatuses(originalStatuses);
+          showToast("Failed to update grant status. Please try again.", 'error');
       }
   };
 
@@ -147,19 +144,20 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
       }
   };
 
-  const handleCreateTeam = (teamName: string) => {
-    teamService.createTeam(teamName, user.id);
-    setTeams(teamService.getTeamsForUser(user.id));
-    setIsTeamManagerOpen(false);
+  const handleCreateTeam = async (teamName: string) => {
+    try {
+      await teamService.createTeam(teamName, user.id);
+      setTeams(await teamService.getTeamsForUser(user.id));
+      setIsTeamManagerOpen(false);
+      showToast(`Team "${teamName}" created!`, 'success');
+    } catch (error) {
+        showToast('Failed to create team. Please try again.', 'error');
+    }
   };
   
   const renderContent = () => {
     if (isLoading) {
       return <div className="mt-20"><LoadingSpinner message="Loading your profiles..." /></div>;
-    }
-
-    if (error) {
-        return <div className="mt-10"><ErrorDisplay message={error} /></div>;
     }
 
     if (selectedProfile) {

@@ -1,57 +1,37 @@
+
 import { Expense, GrantOpportunity } from '../types';
+import { getToken } from './authService';
 
-const EXPENSES_KEY = 'grantfinder_expenses';
+const API_URL = 'http://localhost:3001/api';
 
-// Helper to create a consistent, unique key for a grant.
-const getGrantId = (grant: GrantOpportunity): string => {
-  const safeName = grant.name.replace(/[^a-zA-Z0-9]/g, '');
-  const safeUrl = grant.url.replace(/[^a-zA-Z0-9]/g, '');
-  return `grant_${safeName}_${safeUrl}`.slice(0, 75);
+const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+    };
 };
 
-const getAllExpenses = (): Record<string, Expense[]> => {
-  try {
-    const expensesJson = localStorage.getItem(EXPENSES_KEY);
-    return expensesJson ? JSON.parse(expensesJson) : {};
-  } catch (error) {
-    console.error("Failed to parse expenses from localStorage", error);
-    return {};
-  }
+export const getExpenses = async (grantId: string): Promise<Expense[]> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/expenses`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch expenses');
+    return response.json();
 };
 
-const saveAllExpenses = (allExpenses: Record<string, Expense[]>): void => {
-  try {
-    localStorage.setItem(EXPENSES_KEY, JSON.stringify(allExpenses));
-  } catch (error) {
-    console.error("Failed to save expenses to localStorage", error);
-  }
+export const addExpense = async (grantId: string, expenseData: Omit<Expense, 'id' | 'grantId'>): Promise<Expense> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/expenses`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(expenseData),
+    });
+    if (!response.ok) throw new Error('Failed to add expense');
+    return response.json();
 };
 
-export const getExpenses = (grant: GrantOpportunity): Expense[] => {
-  if (!grant) return [];
-  const grantId = getGrantId(grant);
-  const allExpenses = getAllExpenses();
-  return allExpenses[grantId] || [];
-};
-
-export const addExpense = (grant: GrantOpportunity, expenseData: Omit<Expense, 'id' | 'grantId'>): Expense => {
-  const grantId = getGrantId(grant);
-  const allExpenses = getAllExpenses();
-  const grantExpenses = allExpenses[grantId] || [];
-  const newExpense: Expense = {
-    ...expenseData,
-    id: Date.now(),
-    grantId,
-  };
-  allExpenses[grantId] = [...grantExpenses, newExpense];
-  saveAllExpenses(allExpenses);
-  return newExpense;
-};
-
-export const deleteExpense = (grant: GrantOpportunity, expenseId: number): void => {
-  const grantId = getGrantId(grant);
-  const allExpenses = getAllExpenses();
-  let grantExpenses = allExpenses[grantId] || [];
-  allExpenses[grantId] = grantExpenses.filter(e => e.id !== expenseId);
-  saveAllExpenses(allExpenses);
+export const deleteExpense = async (grantId: string, expenseId: number): Promise<void> => {
+    const response = await fetch(`${API_URL}/grants/${grantId}/expenses/${expenseId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to delete expense');
 };

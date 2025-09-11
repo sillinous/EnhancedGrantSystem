@@ -1,12 +1,9 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GrantOpportunity, FundingProfile, ChatMessage, GrantStatus, User, AppConfig } from '../types';
-import { createChat, sendMessageToChat, draftGrantSection, draftGrantReport } from '../services/geminiService';
+import * as geminiService from '../services/geminiService';
 import { getConfig } from '../services/configService';
 import * as usageService from '../services/usageService';
-import type { Chat } from '@google/genai';
 import FeatureGuard from './FeatureGuard';
-// FIX: Aliased the User icon to UserIcon to avoid a name collision with the User type.
 import { Bot, User as UserIcon, Wand2, Send, Copy, Save, Check, FileBarChart2 } from 'lucide-react';
 
 interface ChatAssistantProps {
@@ -52,49 +49,57 @@ const DraftMessageBlock: React.FC<{ message: ChatMessage; onSaveDraft: (section:
 };
 
 const ChatAssistant: React.FC<ChatAssistantProps> = ({ grant, profile, onSaveDraft, user }) => {
-  const [chat, setChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [waitingForReportNotes, setWaitingForReportNotes] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const [config] = useState<AppConfig>(getConfig());
+  const [config, setConfig] = useState<AppConfig | null>(null);
   const [usage, setUsage] = useState({ remaining: 0, limit: 5 });
 
   const isAwarded = grant.status === 'Awarded';
 
   useEffect(() => {
-    setChat(createChat(profile, grant));
     const welcomeMessage = isAwarded
       ? `Congratulations on your grant! I can help you draft progress reports. Use the Reporting Tools to begin.`
       : `Hi! I'm GrantBot. Ask a question, or use the Drafting Tools to get started.`;
     setMessages([{ sender: 'ai', text: welcomeMessage }]);
     setWaitingForReportNotes(false);
 
-    if (config.monetizationModel === 'UsageBased') {
-        setUsage(usageService.getUsage(user.id, 'AI Grant Writing Studio'));
-    }
-  }, [grant, profile, isAwarded, user.id, config.monetizationModel]);
+    const fetchConfigAndUsage = async () => {
+        const appConfig = await getConfig();
+        setConfig(appConfig);
+        if (appConfig.monetizationModel === 'UsageBased') {
+            // FIX: The `getUsage` service function requires a `userId` as the first argument.
+            const usageData = await usageService.getUsage(user.id, 'AI Grant Writing Studio');
+            setUsage(usageData);
+        }
+    };
+    fetchConfigAndUsage();
+  }, [grant, profile, isAwarded, user.id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleSend = useCallback(async (messageText: string) => {
-    if (!messageText.trim() || isLoading || !chat) return;
+    if (!messageText.trim() || isLoading || !config) return;
     const userMessage: ChatMessage = { sender: 'user', text: messageText };
-    setMessages(prev => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInput('');
     setIsLoading(true);
 
     if (waitingForReportNotes) {
       if (config.monetizationModel === 'UsageBased') {
-        usageService.recordUsage(user.id, 'AI Grant Writing Studio');
-        setUsage(usageService.getUsage(user.id, 'AI Grant Writing Studio'));
+        // FIX: The `recordUsage` service function requires a `userId` as the first argument.
+        await usageService.recordUsage(user.id, 'AI Grant Writing Studio');
+        // FIX: The `getUsage` service function requires a `userId` as the first argument.
+        setUsage(await usageService.getUsage(user.id, 'AI Grant Writing Studio'));
       }
       try {
-        const draftContent = await draftGrantReport(profile, grant, messageText);
+        const draftContent = await geminiService.draftGrantReport(profile, grant, messageText);
         const draftMessage: ChatMessage = {
           sender: 'ai',
           type: 'draft',
@@ -112,7 +117,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({ grant, profile, onSaveDra
       }
     } else {
       try {
-        const aiResponseText = await sendMessageToChat(chat, messageText);
+        const aiResponseText = await geminiService.sendMessageToChat(profile, grant, newMessages, messageText);
         const aiMessage: ChatMessage = { sender: 'ai', text: aiResponseText };
         setMessages(prev => [...prev, aiMessage]);
       } catch (e) {
@@ -123,26 +128,30 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({ grant, profile, onSaveDra
         setIsLoading(false);
       }
     }
-  }, [isLoading, chat, waitingForReportNotes, profile, grant, user.id, config.monetizationModel]);
+  }, [isLoading, messages, config, waitingForReportNotes, profile, grant]);
 
   const handleDraftRequest = useCallback(async (section: string) => {
-    if (isLoading) return;
+    if (isLoading || !config) return;
     
     if (config.monetizationModel === 'UsageBased') {
-      const currentUsage = usageService.getUsage(user.id, 'AI Grant Writing Studio');
-      if (currentUsage.remaining <= 0) return; // Guarded by UI, but safe to check
-      usageService.recordUsage(user.id, 'AI Grant Writing Studio');
-      setUsage(usageService.getUsage(user.id, 'AI Grant Writing Studio'));
+      // FIX: The `getUsage` service function requires a `userId` as the first argument.
+      const currentUsage = await usageService.getUsage(user.id, 'AI Grant Writing Studio');
+      if (currentUsage.remaining <= 0) return;
+      // FIX: The `recordUsage` service function requires a `userId` as the first argument.
+      await usageService.recordUsage(user.id, 'AI Grant Writing Studio');
+      // FIX: The `getUsage` service function requires a `userId` as the first argument.
+      setUsage(await usageService.getUsage(user.id, 'AI Grant Writing Studio'));
     }
 
     setIsLoading(true);
     setMessages(prev => [...prev, { sender: 'user', text: `Draft a section for: ${section}` }]);
 
     try {
-        const draftContent = await draftGrantSection(profile, grant, section);
+        const teamId = profile.owner.type === 'team' ? profile.owner.id : undefined;
+        const draftContent = await geminiService.draftGrantSection(profile, grant, section, teamId);
         const draftMessage: ChatMessage = {
             sender: 'ai',
-            text: '', // Text is not used for draft types
+            text: '',
             type: 'draft',
             draftContent: { section, content: draftContent },
             isSaved: false
@@ -155,13 +164,14 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({ grant, profile, onSaveDra
     } finally {
         setIsLoading(false);
     }
-  }, [isLoading, profile, grant, user.id, config.monetizationModel]);
+  }, [isLoading, profile, grant, config]);
   
-  const handleReportRequest = (section: string) => {
-    if (isLoading) return;
+  const handleReportRequest = async (section: string) => {
+    if (isLoading || !config) return;
 
     if (config.monetizationModel === 'UsageBased') {
-      const currentUsage = usageService.getUsage(user.id, 'AI Grant Writing Studio');
+      // FIX: The `getUsage` service function requires a `userId` as the first argument.
+      const currentUsage = await usageService.getUsage(user.id, 'AI Grant Writing Studio');
       if (currentUsage.remaining <= 0) return;
     }
     
@@ -221,7 +231,7 @@ const ChatAssistant: React.FC<ChatAssistantProps> = ({ grant, profile, onSaveDra
         <FeatureGuard user={user} featureName="AI Grant Writing Studio">
             <div className="flex justify-between items-center mb-2 px-1">
                 <p className="text-xs font-semibold text-gray-500">{isAwarded ? 'AI REPORTING STUDIO' : 'AI GRANT WRITING STUDIO'}</p>
-                {config.monetizationModel === 'UsageBased' && user.role !== 'Admin' && (
+                {config?.monetizationModel === 'UsageBased' && user.role !== 'Admin' && (
                     <span className="text-xs font-semibold text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
                         {usage.remaining}/{usage.limit} Free Drafts Remaining
                     </span>
