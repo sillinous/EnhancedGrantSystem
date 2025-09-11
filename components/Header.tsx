@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import { User, Team } from '../types';
 import * as teamService from '../services/teamService';
 import { LogOut, LayoutDashboard, UserCircle, Search, ChevronDown, Settings, Shield, Users, Star, BookOpen, BrainCircuit, LayoutGrid } from 'lucide-react';
@@ -15,6 +16,13 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
   const [teamAdminOf, setTeamAdminOf] = useState<Team[]>([]);
   const { branding } = useBranding();
 
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{name: string; path: string; icon: React.ReactNode; keywords: string}[]>([]);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+
   useEffect(() => {
     if (user) {
       const allTeams = teamService.getTeamsForUser(user.id);
@@ -30,6 +38,59 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
     setIsUserMenuOpen(false);
   };
 
+  const searchablePages = user ? [
+    { name: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard size={16} />, keywords: 'home main overview' },
+    { name: 'Pipeline', path: '/pipeline', icon: <LayoutGrid size={16} />, keywords: 'kanban board status' },
+    { name: 'Profiles & Search', path: '/app', icon: <Search size={16} />, keywords: 'find grants opportunities' },
+    { name: 'Intelligence', path: '/intelligence', icon: <BrainCircuit size={16} />, keywords: 'ai insights trends' },
+    { name: 'Pricing', path: '/pricing', icon: <Star size={16} />, keywords: 'upgrade subscription pro plan' },
+    { name: 'Resources', path: '/resources', icon: <BookOpen size={16} />, keywords: 'help docs articles' },
+    { name: 'Account', path: '/account', icon: <UserCircle size={16} />, keywords: 'settings profile subscription' },
+    ...(user.role === 'Admin' ? [
+        { name: 'Super Admin', path: '/super-admin', icon: <Shield size={16} />, keywords: 'users management impersonate' },
+        { name: 'App Config', path: '/app-config', icon: <Settings size={16} />, keywords: 'monetization model' }
+    ] : []),
+    ...teamAdminOf.map(team => ({ name: `${team.name} Hub`, path: `/team-hub/${team.id}`, icon: <Users size={16} />, keywords: `organization team members ${team.name}` })),
+  ] : [];
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+
+    if (query.trim().length > 0) {
+        const lowerCaseQuery = query.toLowerCase();
+        const results = searchablePages.filter(page =>
+            page.name.toLowerCase().includes(lowerCaseQuery) ||
+            page.keywords.toLowerCase().includes(lowerCaseQuery)
+        );
+        setSearchResults(results);
+        setIsSearchOpen(true);
+    } else {
+        setSearchResults([]);
+        setIsSearchOpen(false);
+    }
+  };
+
+  const handleResultClick = (path: string) => {
+      navigateTo(path);
+      setSearchQuery('');
+      setSearchResults([]);
+      setIsSearchOpen(false);
+  };
+
+  useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+          if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+              setIsSearchOpen(false);
+          }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+          document.removeEventListener('mousedown', handleClickOutside);
+      };
+  }, []);
+
+
   const handleProfilesClick = (e: React.MouseEvent) => {
     e.preventDefault();
     navigateTo('/app');
@@ -39,18 +100,51 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
     <header className="bg-white shadow-md sticky top-0 z-50">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          <a href="/" onClick={(e) => { e.preventDefault(); navigateTo(user ? '/dashboard' : '/'); }} className="flex items-center cursor-pointer">
-             {branding.logoUrl ? (
-                <img src={branding.logoUrl} alt="Team Logo" className="h-8 w-auto" />
-             ) : (
-                <>
-                <div className="bg-primary p-2 rounded-lg mr-3">
-                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>
-                </div>
-                <h1 className="text-xl font-bold text-primary">GrantFinder AI</h1>
-                </>
-             )}
-          </a>
+          <div className="flex items-center gap-8">
+            <a href="/" onClick={(e) => { e.preventDefault(); navigateTo(user ? '/dashboard' : '/'); }} className="flex items-center cursor-pointer flex-shrink-0">
+              {branding.logoUrl ? (
+                  <img src={branding.logoUrl} alt="Team Logo" className="h-8 w-auto" />
+              ) : (
+                  <>
+                  <div className="bg-primary p-2 rounded-lg mr-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>
+                  </div>
+                  <h1 className="text-xl font-bold text-primary">GrantFinder AI</h1>
+                  </>
+              )}
+            </a>
+            {user && (
+              <div className="relative hidden md:block" ref={searchRef}>
+                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <input
+                      type="text"
+                      placeholder="Search & Navigate..."
+                      value={searchQuery}
+                      onChange={handleSearchChange}
+                      onFocus={() => searchQuery.trim().length > 0 && setIsSearchOpen(true)}
+                      className="w-72 bg-gray-100 border border-transparent rounded-lg pl-10 pr-4 py-2 text-sm focus:bg-white focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                      aria-label="Search navigation"
+                  />
+                  {isSearchOpen && searchResults.length > 0 && (
+                      <div className="absolute top-full mt-2 w-full bg-white rounded-lg shadow-xl border z-30 animate-fade-in">
+                          <ul className="p-1 max-h-80 overflow-y-auto">
+                              {searchResults.map(result => (
+                                  <li key={result.path}>
+                                      <button
+                                          onClick={() => handleResultClick(result.path)}
+                                          className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
+                                      >
+                                          <span className="text-gray-500">{result.icon}</span>
+                                          {result.name}
+                                      </button>
+                                  </li>
+                              ))}
+                          </ul>
+                      </div>
+                  )}
+              </div>
+            )}
+          </div>
           
           {!user ? (
              <div className="flex items-center gap-2">
@@ -62,7 +156,7 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
           ) : (
             <div className="flex items-center gap-6">
               {/* Main Navigation */}
-              <nav className="hidden md:flex items-center gap-6">
+              <nav className="hidden xl:flex items-center gap-6">
                 <a href="/dashboard" onClick={(e) => { e.preventDefault(); navigateTo('/dashboard'); }} className="flex items-center text-sm font-medium text-gray-600 hover:text-primary transition-colors">
                     <LayoutDashboard size={16} className="mr-1.5" /> Dashboard
                 </a>
@@ -83,7 +177,7 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
                 </a>
               </nav>
 
-              <div className="h-6 w-px bg-gray-200 hidden md:block"></div>
+              <div className="h-6 w-px bg-gray-200 hidden xl:block"></div>
 
               {/* User Menu */}
               <div className="relative">
@@ -100,6 +194,26 @@ const Header: React.FC<HeaderProps> = ({ user, onLogout }) => {
 
                 {isUserMenuOpen && (
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border z-20" onMouseLeave={() => setIsUserMenuOpen(false)}>
+                    <div className="p-2 border-b xl:hidden">
+                        <a href="/dashboard" onClick={(e) => { e.preventDefault(); navigateTo('/dashboard'); }} className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md">
+                            <LayoutDashboard size={16} /> Dashboard
+                        </a>
+                         <a href="/pipeline" onClick={(e) => { e.preventDefault(); navigateTo('/pipeline'); }} className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md">
+                            <LayoutGrid size={16} /> Pipeline
+                        </a>
+                        <a href="/app" onClick={(e) => {e.preventDefault(); navigateTo('/app')}} className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md">
+                            <Search size={16} /> Profiles & Search
+                        </a>
+                        <a href="/intelligence" onClick={(e) => { e.preventDefault(); navigateTo('/intelligence'); }} className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md">
+                            <BrainCircuit size={16} /> Intelligence
+                        </a>
+                         <a href="/pricing" onClick={(e) => { e.preventDefault(); navigateTo('/pricing'); }} className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md">
+                            <Star size={16} /> Pricing
+                        </a>
+                        <a href="/resources" onClick={(e) => { e.preventDefault(); navigateTo('/resources'); }} className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-md">
+                            <BookOpen size={16} /> Resources
+                        </a>
+                    </div>
                     <div className="p-2 border-b">
                         <p className="text-sm font-semibold px-2 truncate">{user.username}</p>
                         <p className={`text-xs font-bold px-2 py-0.5 rounded-full mt-1 inline-block ${user.isSubscribed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>

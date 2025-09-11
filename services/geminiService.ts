@@ -1,8 +1,10 @@
 
 
+
 import { GoogleGenAI, GenerateContentResponse, Chat, Type } from "@google/genai";
-import { FundingProfile, GrantOpportunity, ChatMessage, EligibilityReport, LifecycleStage, LifecycleInsights, GrantDraft, ApplicationReview, RedTeamReview, BudgetItem, FunderPersona, SuccessPatternAnalysis, DifferentiationAnalysis, CohesionAnalysis, Team } from '../types';
+import { FundingProfile, GrantOpportunity, ChatMessage, EligibilityReport, LifecycleStage, LifecycleInsights, GrantDraft, ApplicationReview, RedTeamReview, BudgetItem, FunderPersona, SuccessPatternAnalysis, DifferentiationAnalysis, CohesionAnalysis, Team, FundingTrendReport, SemanticSearchResult, LessonsLearnedReport } from '../types';
 import * as boilerplateService from './boilerplateService';
+import * as knowledgeBaseService from './knowledgeBaseService';
 
 if (!process.env.API_KEY) {
   throw new Error("API_KEY environment variable not set");
@@ -843,4 +845,160 @@ export const generateImpactStory = async (dataPoints: string): Promise<string> =
     });
 
     return response.text.trim();
+};
+
+export const analyzeFundingTrends = async (sector: string): Promise<FundingTrendReport> => {
+    const prompt = `
+    As a market intelligence analyst specializing in grant funding, provide a concise report on the current trends for the '${sector}' sector.
+    
+    1.  **Use Search**: Use your search tool to find recent articles, reports, and news about funding in this sector.
+    2.  **Synthesize Findings**: Based on your research, generate a brief summary, identify emerging keywords funders are using, list any shifting priorities, and note new areas of focus.
+    3.  **Format Output**: Return your complete analysis as a single, valid JSON object that strictly adheres to the provided schema.
+
+    **Sector to Analyze:** ${sector}
+    `;
+
+    const response = await ai.models.generateContent({
+        model: searchModel,
+        contents: prompt,
+        config: {
+            tools: [{ googleSearch: {} }],
+            temperature: 0.3,
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    sector: { type: Type.STRING },
+                    summary: { type: Type.STRING },
+                    emergingKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    shiftingPriorities: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    newAreasOfFocus: { type: Type.ARRAY, items: { type: Type.STRING } },
+                },
+                required: ["sector", "summary", "emergingKeywords", "shiftingPriorities", "newAreasOfFocus"]
+            }
+        }
+    });
+    
+    const reportData = parseJsonFromMarkdown(response.text);
+    return { ...reportData, generatedAt: new Date().toISOString() };
+};
+
+export const searchKnowledgeBase = async (query: string, teamId: number): Promise<SemanticSearchResult> => {
+    const documents = knowledgeBaseService.getKnowledgeBaseDocuments(teamId);
+    if (documents.length === 0) {
+        return { answer: "The knowledge base is empty. Please add some past grant documents to enable this feature.", sources: [] };
+    }
+
+    const documentContext = documents.map(doc => 
+        `--- Document: ${doc.name} (Outcome: ${doc.outcome}) ---\n${doc.content}\n--- End Document ---`
+    ).join('\n\n');
+
+    const prompt = `
+    You are an AI assistant with access to a team's internal knowledge base of past grant applications. Your task is to answer the user's question based *only* on the provided documents.
+
+    **Knowledge Base Content:**
+    ${documentContext}
+
+    **User's Question:**
+    "${query}"
+
+    **Your Task:**
+    1.  Read the user's question carefully.
+    2.  Synthesize an answer using information directly from the provided documents.
+    3.  Cite which documents you used to formulate your answer.
+    4.  If the answer cannot be found in the documents, state that clearly.
+    5.  Return your response ONLY as a single, valid JSON object.
+    `;
+    
+    const response = await ai.models.generateContent({
+        model: chatModel,
+        contents: prompt,
+        config: {
+            temperature: 0.1,
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    answer: { type: Type.STRING },
+                    sources: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                documentId: { type: Type.NUMBER },
+                                documentName: { type: Type.STRING },
+                            },
+                            required: ["documentId", "documentName"]
+                        }
+                    }
+                },
+                required: ["answer", "sources"]
+            }
+        }
+    });
+
+    return parseJsonFromMarkdown(response.text);
+};
+
+export const generateLessonsLearned = async (teamId: number): Promise<LessonsLearnedReport> => {
+    const documents = knowledgeBaseService.getKnowledgeBaseDocuments(teamId);
+    const wonDocs = documents.filter(d => d.outcome === 'Won');
+    const lostDocs = documents.filter(d => d.outcome === 'Lost');
+
+    if (wonDocs.length === 0 || lostDocs.length === 0) {
+        throw new Error("Cannot generate a report without at least one 'Won' and one 'Lost' document in the knowledge base.");
+    }
+    
+    const wonContext = wonDocs.map(doc => `--- Won: ${doc.name} ---\n${doc.content}`).join('\n\n');
+    const lostContext = lostDocs.map(doc => `--- Lost: ${doc.name} ---\n${doc.content}`).join('\n\n');
+
+    const prompt = `
+    You are a senior grant strategist. Analyze the provided 'Won' and 'Lost' grant proposals to generate a "Lessons Learned" report. 
+    Identify recurring themes and provide actionable suggestions for future applications.
+
+    **Winning Proposals:**
+    ${wonContext}
+
+    **Losing Proposals:**
+    ${lostContext}
+
+    **Your Task:**
+    1.  Compare the content of the 'Won' vs. 'Lost' applications.
+    2.  Identify 2-3 key themes or patterns that differentiate successful applications from unsuccessful ones.
+    3.  For each theme, provide a concrete suggestion for improvement.
+    4.  Extract short, supporting excerpts from the documents to justify your findings.
+    5.  Provide a high-level summary.
+    6.  Return the report ONLY as a single JSON object.
+    `;
+    
+    const response = await ai.models.generateContent({
+        model: chatModel,
+        contents: prompt,
+        config: {
+            temperature: 0.5,
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                    summary: { type: Type.STRING },
+                    findings: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                theme: { type: Type.STRING },
+                                suggestion: { type: Type.STRING },
+                                supportingExcerpts: { type: Type.ARRAY, items: { type: Type.STRING } }
+                            },
+                            required: ["theme", "suggestion", "supportingExcerpts"]
+                        }
+                    }
+                },
+                required: ["summary", "findings"]
+            }
+        }
+    });
+    
+    const reportData = parseJsonFromMarkdown(response.text);
+    return { ...reportData, generatedAt: new Date().toISOString() };
 };

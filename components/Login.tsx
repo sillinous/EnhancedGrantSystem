@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { User } from '../types';
 import * as authService from '../services/authService';
@@ -14,20 +13,18 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      const user = authService.login(username, password);
-      setIsLoading(false);
-      if (user) {
-        onLoginSuccess(user);
-      } else {
-        setError('Invalid username or password.');
-      }
-    }, 500);
+    
+    const user = await authService.login(username, password);
+    setIsLoading(false);
+    if (user) {
+      onLoginSuccess(user);
+    } else {
+      setError('Invalid username or password.');
+    }
   };
   
   const handleDemoLogin = (user: 'user' | 'pro' | 'admin') => {
