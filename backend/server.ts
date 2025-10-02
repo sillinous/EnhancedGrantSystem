@@ -3,11 +3,11 @@ import express from 'express';
 import { Request as ExpressRequest, Response as ExpressResponse, NextFunction as ExpressNextFunction } from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
-import { GoogleGenAI, GenerateContentResponse, Chat, Type } from "@google/genai";
+import { GoogleGenAI } from '@google/genai';
 import * as db from './db';
-// FIX: The `Database` type was used without being imported. It is now imported from `db.ts` after being exported there.
 import type { Database } from './db';
-import { User, FundingProfile, Team, GrantOpportunity, GrantStatus, ChecklistItem, GrantDraft, BudgetItem, Expense, ReportingRequirement, Document, ApplicationReview, RedTeamReview, FunderPersona, SuccessPatternAnalysis, DifferentiationAnalysis, CohesionAnalysis, ActivityLog, Comment, ChatMessage, BoilerplateDocument, KnowledgeBaseDocument, SourcingAgent, Notification } from '../src/types';
+import * as aiHandlers from './aiHandlers';
+import { User, FundingProfile, Team, GrantOpportunity, GrantStatus, ChecklistItem, GrantDraft, LifecycleStage, BudgetItem, Expense, ReportingRequirement, Document, ApplicationReview, RedTeamReview, FunderPersona, SuccessPatternAnalysis, DifferentiationAnalysis, CohesionAnalysis, ActivityLog, Comment, ChatMessage, BoilerplateDocument, KnowledgeBaseDocument, SourcingAgent, Notification } from '../types';
 
 // This is the idiomatic way to handle custom request properties in Express with TypeScript.
 declare global {
@@ -22,12 +22,13 @@ const app = express();
 const port = 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-that-should-be-in-an-env-file';
 
-if (!process.env.API_KEY) {
-  throw new Error("API_KEY environment variable not set for the backend server");
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.API_KEY;
+const aiClient = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
+if (!aiClient) {
+  console.warn('Gemini API key not configured; AI endpoints will use heuristic responses.');
 }
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-const chatModel = 'gemini-2.5-flash';
-const searchModel = 'gemini-2.5-flash';
+const chatModel = process.env.GEMINI_CHAT_MODEL || 'gemini-2.5-flash';
+const searchModel = process.env.GEMINI_SEARCH_MODEL || 'gemini-2.5-flash';
 
 
 // --- Helper Functions ---

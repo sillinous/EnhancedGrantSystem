@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { User, Team, FundingProfile, GrantOpportunity, GrantStatus, ChecklistItem, GrantDraft, BudgetItem, Expense, ReportingRequirement, Document, ApplicationReview, RedTeamReview, FunderPersona, SuccessPatternAnalysis, DifferentiationAnalysis, CohesionAnalysis, ActivityLog, AppConfig, Subscription, BoilerplateDocument, KnowledgeBaseDocument, SourcingAgent, Notification } from '../src/types';
+import { User, Team, FundingProfile, GrantOpportunity, GrantStatus, ChecklistItem, GrantDraft, BudgetItem, Expense, ReportingRequirement, Document, ApplicationReview, RedTeamReview, FunderPersona, SuccessPatternAnalysis, DifferentiationAnalysis, CohesionAnalysis, ActivityLog, AppConfig, Subscription, BoilerplateDocument, KnowledgeBaseDocument, SourcingAgent, Notification } from '../types';
 
 const dbPath = path.join(__dirname, 'db.json');
 
