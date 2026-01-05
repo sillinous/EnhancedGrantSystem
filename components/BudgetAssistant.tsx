@@ -138,7 +138,7 @@ const BudgetAssistant: React.FC<BudgetAssistantProps> = ({ grantId, profile }) =
               </div>
             </div>
           ))
-        )}
+        }
       </div>
     </div>
   );
