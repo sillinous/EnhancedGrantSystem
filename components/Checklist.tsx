@@ -1,17 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
-import { ChecklistItem, FundingProfile, Document } from '../types';
+import { ChecklistItem, FundingProfile, Document, User } from '../types';
 import * as checklistService from '../services/checklistService';
 import * as documentService from '../services/documentService';
 import { Plus, Trash2, Paperclip, FileText, X, Calendar } from 'lucide-react';
 import LoadingSpinner from './LoadingSpinner';
+import AIEnhancedInput from './AIEnhancedInput';
 
 interface ChecklistProps {
   grantId: string;
   profile: FundingProfile;
+  user?: User | null;
 }
 
-const Checklist: React.FC<ChecklistProps> = ({ grantId, profile }) => {
+const Checklist: React.FC<ChecklistProps> = ({ grantId, profile, user }) => {
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [newItemText, setNewItemText] = useState('');
@@ -112,7 +114,19 @@ const Checklist: React.FC<ChecklistProps> = ({ grantId, profile }) => {
     <div className="animate-fade-in">
       <h3 className="text-lg font-semibold text-gray-800 mb-4">Application Checklist</h3>
       <form onSubmit={handleAddItem} className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-4 items-center">
-        <input type="text" value={newItemText} onChange={(e) => setNewItemText(e.target.value)} placeholder="Add a new task..." className="md:col-span-2 px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary text-sm" aria-label="New checklist item" />
+        <AIEnhancedInput
+          value={newItemText}
+          onChange={setNewItemText}
+          placeholder="Add a new task..."
+          className="px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary text-sm"
+          wrapperClassName="md:col-span-2"
+          user={user}
+          aiConfig={{
+            fieldType: 'checklist_item',
+            context: { profile },
+            featureName: 'AI Auto-Populate'
+          }}
+        />
         <div className="flex gap-2">
             <input type="date" value={newItemDueDate} onChange={(e) => setNewItemDueDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary text-sm text-gray-500" aria-label="Due date for new item"/>
             <button type="submit" className="flex-shrink-0 p-2 bg-primary text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400" disabled={!newItemText.trim()} aria-label="Add checklist item"><Plus size={20} /></button>

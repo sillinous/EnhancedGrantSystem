@@ -356,3 +356,43 @@ export interface Notification {
   isRead: boolean;
   createdAt: string;
 }
+
+// AI Auto-Populate Types
+export type AIFieldType =
+  | 'profile_name'
+  | 'profile_description'
+  | 'funding_needs'
+  | 'industry'
+  | 'budget_description'
+  | 'budget_justification'
+  | 'checklist_item'
+  | 'draft_content'
+  | 'document_name'
+  | 'report_description'
+  | 'expense_description'
+  | 'team_name'
+  | 'feedback_message'
+  | 'generic';
+
+export interface AIContext {
+  profile?: FundingProfile;
+  grant?: GrantOpportunity;
+  drafts?: GrantDraft[];
+  budgetItems?: BudgetItem[];
+  team?: Team;
+  fieldLabel?: string;
+  currentValue?: string;
+  additionalContext?: Record<string, unknown>;
+}
+
+export interface FieldCompletionRequest {
+  fieldType: AIFieldType;
+  currentValue: string;
+  customPrompt?: string;
+  context: AIContext;
+}
+
+export interface FieldCompletionResponse {
+  suggestion: string;
+  confidence: 'high' | 'medium' | 'low';
+}

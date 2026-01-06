@@ -330,6 +330,95 @@ app.post('/api/ai/chat', authenticateToken, async (req: ExpressRequest, res: Exp
 // Each one will take the body, construct the prompt, call the AI, and return the result.
 // This is a simplified example. A real implementation would abstract this more.
 
+// --- AI Field Completion (Auto-Populate) ---
+const fieldPromptTemplates: Record<string, string> = {
+  profile_name: 'Generate a professional and memorable organization/project name for a {profileType} in the {industry} sector. The name should be concise (2-4 words), professional, and reflect the mission. Return only the name, no explanation.',
+  profile_description: 'Write a compelling 2-3 sentence description for an organization/project in {industry}. Focus on mission, impact, and unique value proposition. Current context: {currentValue}',
+  funding_needs: 'Suggest specific, actionable funding needs for a {stage} stage {profileType} in {industry}. List 3-5 concrete items like equipment, personnel, research costs. Format as a comma-separated list.',
+  industry: 'Suggest a specific industry or focus area based on the profile description: {currentValue}. Return only the industry name (e.g., "Renewable Energy", "Healthcare Technology", "Arts & Culture").',
+  budget_description: 'Generate a clear, specific budget line item description for a grant application. Make it professional and specific. Return only the description, no amount.',
+  budget_justification: 'Write a compelling 2-3 sentence budget justification explaining why this expense is necessary for the project and how it links to objectives. Item: {currentValue}',
+  checklist_item: 'Suggest a relevant, actionable task for grant application preparation. Be specific and include any relevant deadlines or requirements. Return only the task description.',
+  draft_content: 'Generate professional grant proposal content. Be specific, compelling, and focus on impact and feasibility. Section context: {currentValue}',
+  document_name: 'Generate a professional document name for a {category} document. Use standard naming conventions (e.g., "2024_Q1_Financial_Statement.pdf"). Return only the filename.',
+  report_description: 'Generate a clear progress report milestone or deliverable description. Be specific about what was accomplished and its impact.',
+  expense_description: 'Generate a clear, categorizable expense description for grant reporting. Include relevant details like purpose and category.',
+  team_name: 'Generate a professional team or department name. Make it memorable but professional (e.g., "Innovation Lab", "Community Impact Team"). Return only the name.',
+  feedback_message: 'Draft constructive, helpful feedback about the platform. Include specific observations and suggestions for improvement.',
+  generic: 'Generate appropriate, professional content based on the context provided. Be concise and relevant.'
+};
+
+app.post('/api/ai/field-completion', authenticateToken, async (req: ExpressRequest, res: ExpressResponse) => {
+  handleAIRequest(res, async () => {
+    const { fieldType, currentValue, context, customPrompt } = req.body;
+
+    // Build context string from available data
+    const contextParts: string[] = [];
+    if (context.profile) {
+      contextParts.push(`Profile: ${context.profile.name || 'Unnamed'} (${context.profile.profileType || 'Unknown type'})`);
+      if (context.profile.industry) contextParts.push(`Industry: ${context.profile.industry}`);
+      if (context.profile.stage) contextParts.push(`Stage: ${context.profile.stage}`);
+      if (context.profile.description) contextParts.push(`Description: ${context.profile.description}`);
+    }
+    if (context.grant) {
+      contextParts.push(`Grant: ${context.grant.name}`);
+      if (context.grant.description) contextParts.push(`Grant focus: ${context.grant.description}`);
+    }
+    if (context.fieldLabel) {
+      contextParts.push(`Field: ${context.fieldLabel}`);
+    }
+
+    // Get template or use custom prompt
+    let prompt = customPrompt || fieldPromptTemplates[fieldType] || fieldPromptTemplates.generic;
+
+    // Replace template variables
+    prompt = prompt
+      .replace('{currentValue}', currentValue || 'not provided')
+      .replace('{profileType}', context.profile?.profileType || 'organization')
+      .replace('{industry}', context.profile?.industry || 'general')
+      .replace('{stage}', context.profile?.stage || 'early')
+      .replace('{category}', context.additionalContext?.category as string || 'general');
+
+    const fullPrompt = `${prompt}\n\nContext:\n${contextParts.join('\n')}\n\nProvide only the requested content, no explanations or preamble.`;
+
+    // Use heuristic fallback if AI not configured
+    if (!aiClient) {
+      const fallbackSuggestions: Record<string, string> = {
+        profile_name: 'Innovation Partners Foundation',
+        profile_description: 'A dedicated organization committed to driving positive change through innovative solutions and community engagement.',
+        funding_needs: 'Research & development, equipment upgrades, staff training, community outreach programs',
+        industry: 'Technology & Innovation',
+        budget_description: 'Professional services and consulting',
+        budget_justification: 'This expense is essential for achieving project objectives and ensuring quality deliverables within the proposed timeline.',
+        checklist_item: 'Review and finalize application materials',
+        draft_content: 'Our project aims to create lasting impact through evidence-based approaches and community collaboration.',
+        document_name: 'Project_Documentation_2024.pdf',
+        report_description: 'Completed milestone deliverables on schedule',
+        expense_description: 'Project-related operational expense',
+        team_name: 'Project Team',
+        feedback_message: 'The platform provides valuable tools for grant management. Consider adding more reporting features.',
+        generic: 'Professional content placeholder'
+      };
+
+      return {
+        suggestion: fallbackSuggestions[fieldType] || fallbackSuggestions.generic,
+        confidence: 'low' as const
+      };
+    }
+
+    const response = await aiClient.models.generateContent({
+      model: chatModel,
+      contents: fullPrompt
+    });
+
+    const suggestion = response.text?.trim() || '';
+
+    return {
+      suggestion,
+      confidence: suggestion.length > 10 ? 'high' : 'medium'
+    };
+  });
+});
 
 // --- Start Server ---
 app.listen(port, () => {

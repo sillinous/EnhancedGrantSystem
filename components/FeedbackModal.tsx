@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Send, Star } from 'lucide-react';
+import AIEnhancedInput from './AIEnhancedInput';
 
 interface FeedbackModalProps {
   isOpen: boolean;
@@ -100,13 +101,19 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose }) => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Your Message
               </label>
-              <textarea
+              <AIEnhancedInput
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={setMessage}
                 placeholder="Tell us what you think..."
+                multiline
                 rows={4}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none"
                 required
+                aiConfig={{
+                  fieldType: 'feedback_message',
+                  context: { additionalContext: { feedbackType } },
+                  featureName: 'AI Auto-Populate'
+                }}
               />
             </div>
 

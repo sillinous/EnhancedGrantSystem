@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { FundingProfile } from '../types';
+import { FundingProfile, User } from '../types';
 import LoadingSpinner from './LoadingSpinner';
+import AIEnhancedInput from './AIEnhancedInput';
 
 interface ProfileFormProps {
   // FIX: The `onSubmit` prop expected a profile with an `owner`, but the form state does not include it. The type has been adjusted to `Omit<FundingProfile, 'id' | 'owner'>` to match the submitted data.
@@ -8,9 +9,10 @@ interface ProfileFormProps {
   isLoading: boolean;
   initialData?: FundingProfile | null;
   onCancel?: () => void;
+  user?: User | null;
 }
 
-const ProfileForm: React.FC<ProfileFormProps> = ({ onSubmit, isLoading, initialData, onCancel }) => {
+const ProfileForm: React.FC<ProfileFormProps> = ({ onSubmit, isLoading, initialData, onCancel, user }) => {
   const [profile, setProfile] = useState({
     profileType: 'Business' as FundingProfile['profileType'],
     name: '',
@@ -76,28 +78,38 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ onSubmit, isLoading, initialD
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Profile Name</label>
-            <input
-              type="text"
+            <AIEnhancedInput
               name="name"
               id="name"
               required
               value={profile.name}
-              onChange={handleChange}
+              onChange={(value) => setProfile(prev => ({ ...prev, name: value }))}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary"
               placeholder="e.g., Innovatech or Personal Project"
+              user={user}
+              aiConfig={{
+                fieldType: 'profile_name',
+                context: { profile: profile as unknown as FundingProfile },
+                featureName: 'AI Auto-Populate'
+              }}
             />
           </div>
           <div>
             <label htmlFor="industry" className="block text-sm font-medium text-gray-700 mb-1">Industry / Area of Focus</label>
-            <input
-              type="text"
+            <AIEnhancedInput
               name="industry"
               id="industry"
               required
               value={profile.industry}
-              onChange={handleChange}
+              onChange={(value) => setProfile(prev => ({ ...prev, industry: value }))}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary"
               placeholder="e.g., Renewable Energy or Arts"
+              user={user}
+              aiConfig={{
+                fieldType: 'industry',
+                context: { profile: profile as unknown as FundingProfile },
+                featureName: 'AI Auto-Populate'
+              }}
             />
           </div>
         </div>
@@ -119,28 +131,40 @@ const ProfileForm: React.FC<ProfileFormProps> = ({ onSubmit, isLoading, initialD
         </div>
         <div>
           <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">Brief Description</label>
-          <textarea
+          <AIEnhancedInput
             name="description"
             id="description"
             required
+            multiline
             rows={4}
             value={profile.description}
-            onChange={handleChange}
+            onChange={(value) => setProfile(prev => ({ ...prev, description: value }))}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary"
             placeholder="Describe your core project, service, or mission."
+            user={user}
+            aiConfig={{
+              fieldType: 'profile_description',
+              context: { profile: profile as unknown as FundingProfile },
+              featureName: 'AI Auto-Populate'
+            }}
           />
         </div>
         <div>
           <label htmlFor="fundingNeeds" className="block text-sm font-medium text-gray-700 mb-1">Specific Funding Needs</label>
-          <input
-            type="text"
+          <AIEnhancedInput
             name="fundingNeeds"
             id="fundingNeeds"
             required
             value={profile.fundingNeeds}
-            onChange={handleChange}
+            onChange={(value) => setProfile(prev => ({ ...prev, fundingNeeds: value }))}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary focus:border-primary"
             placeholder="e.g., R&D, community outreach, hiring"
+            user={user}
+            aiConfig={{
+              fieldType: 'funding_needs',
+              context: { profile: profile as unknown as FundingProfile },
+              featureName: 'AI Auto-Populate'
+            }}
           />
         </div>
         <div>
