@@ -1,0 +1,146 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "user@example.com",
+      "role": "User",
+      "isSubscribed": false,
+      "teamIds": [
+        101
+      ]
+    },
+    {
+      "id": 2,
+      "username": "pro_user@example.com",
+      "role": "User",
+      "isSubscribed": true,
+      "teamIds": [
+        101,
+        102
+      ]
+    },
+    {
+      "id": 3,
+      "username": "admin@example.com",
+      "role": "Admin",
+      "isSubscribed": true,
+      "teamIds": []
+    },
+    {
+      "id": 4,
+      "username": "teammate@example.com",
+      "role": "User",
+      "isSubscribed": false,
+      "teamIds": [
+        101
+      ]
+    }
+  ],
+  "teams": [
+    {
+      "id": 101,
+      "name": "EcoInnovate Foundation",
+      "members": [
+        {
+          "userId": 1,
+          "role": "Editor"
+        },
+        {
+          "userId": 2,
+          "role": "Admin"
+        },
+        {
+          "userId": 4,
+          "role": "Viewer"
+        }
+      ],
+      "branding": {
+        "primaryColor": "#16a34a",
+        "logoUrl": "https://placehold.co/150x50/16a34a/FFFFFF/png?text=EcoInnovate"
+      }
+    },
+    {
+      "id": 102,
+      "name": "Pro User's Side Project",
+      "members": [
+        {
+          "userId": 2,
+          "role": "Admin"
+        }
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "id": 1001,
+      "name": "EcoInnovate Foundation",
+      "profileType": "Non-Profit",
+      "industry": "Environmental Conservation",
+      "stage": "Established",
+      "description": "A non-profit dedicated to funding and supporting projects that address climate change through technological innovation and community action.",
+      "fundingNeeds": "Operational costs, project scaling, research grants for partners",
+      "owner": {
+        "type": "team",
+        "id": 101
+      }
+    },
+    {
+      "id": 1,
+      "name": "Personal Art Project",
+      "profileType": "Individual",
+      "industry": "Digital Art & Media",
+      "stage": "Idea",
+      "description": "A personal project to create a series of interactive digital sculptures exploring the intersection of nature and technology.",
+      "fundingNeeds": "Hardware (VR headset, high-spec PC), software licenses, marketing budget",
+      "owner": {
+        "type": "user",
+        "id": 1
+      }
+    }
+  ],
+  "trackedGrants": [],
+  "grantStatuses": {},
+  "grantOwners": {},
+  "checklists": {},
+  "drafts": {},
+  "budgetItems": {},
+  "expenses": {},
+  "reportingRequirements": {},
+  "documents": {},
+  "reviews": {},
+  "redTeamReviews": {},
+  "personas": {},
+  "successPatterns": {},
+  "differentiationAnalyses": {},
+  "cohesionAnalyses": {},
+  "activityLogs": {},
+  "appConfig": {
+    "monetizationModel": "Subscription",
+    "enabledSSOProviders": []
+  },
+  "subscriptions": {},
+  "boilerplates": {},
+  "knowledgeBase": {
+    "101": [
+      {
+        "id": 1,
+        "teamId": 101,
+        "name": "EcoInnovate Climate Grant 2023 Application",
+        "content": "Our project focuses on carbon capture...",
+        "outcome": "Won",
+        "uploadedAt": "2023-09-15T10:00:00Z"
+      },
+      {
+        "id": 2,
+        "teamId": 101,
+        "name": "Water Conservation Proposal 2023",
+        "content": "This was a proposal for a new water filtration system...",
+        "outcome": "Lost",
+        "uploadedAt": "2023-10-02T14:30:00Z"
+      }
+    ]
+  },
+  "sourcingAgents": [],
+  "notifications": [],
+  "feedback": []
+}

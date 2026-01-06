@@ -293,28 +293,33 @@ const handleAIRequest = async (res: ExpressResponse, handler: () => Promise<any>
 // FIX: Added explicit types for req and res to resolve property access errors.
 app.post('/api/ai/find-grants', authenticateToken, async (req: ExpressRequest, res: ExpressResponse) => {
     handleAIRequest(res, async () => {
+        if (!aiClient) {
+            throw new Error('AI service not configured. Please set GEMINI_API_KEY.');
+        }
         const { profile } = req.body;
         // This is where the actual geminiService.findGrants logic now lives
-        const prompt = `...`; // The full prompt from the old geminiService
-        const response = await ai.models.generateContent({ model: searchModel, contents: prompt, config: { tools: [{ googleSearch: {} }] } });
-        const opportunities = parseJsonFromMarkdown(response.text);
-        const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-        return { opportunities, sources };
+        const prompt = `Find grants for: ${JSON.stringify(profile)}`;
+        const response = await aiClient.models.generateContent({ model: searchModel, contents: prompt });
+        const opportunities = parseJsonFromMarkdown(response.text || '[]');
+        return { opportunities, sources: [] };
     });
 });
 
 // FIX: Added explicit types for req and res to resolve property access errors.
 app.post('/api/ai/chat', authenticateToken, async (req: ExpressRequest, res: ExpressResponse) => {
     handleAIRequest(res, async () => {
+        if (!aiClient) {
+            throw new Error('AI service not configured. Please set GEMINI_API_KEY.');
+        }
         const { profile, grant, messages, newMessage } = req.body;
-        const systemInstruction = `...`; // Full system instruction from old geminiService
-        
+        const systemInstruction = `You are a grant writing assistant.`;
+
         const history = messages.map((msg: ChatMessage) => ({
             role: msg.sender === 'user' ? 'user' : 'model',
             parts: [{ text: msg.text }]
         }));
 
-        const chat = ai.chats.create({ model: chatModel, config: { systemInstruction }, history });
+        const chat = aiClient.chats.create({ model: chatModel, config: { systemInstruction }, history });
         const result = await chat.sendMessage({ message: newMessage });
         return { reply: result.text };
     });
