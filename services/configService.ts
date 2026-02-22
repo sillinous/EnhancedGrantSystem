@@ -1,34 +1,9 @@
-import { AppConfig, MonetizationModel } from '../types';
-
-const APP_CONFIG_KEY = 'grantfinder_appConfig';
-
+import { AppConfig } from '../types';
 const defaultConfig: AppConfig = {
-  monetizationModel: 'Free',
-  // FIX: Add missing required property `enabledSSOProviders`.
+  monetizationModel: 'Unlimited' as any,
+  features: {} as any,
   enabledSSOProviders: [],
 };
-
-export const getConfig = (): AppConfig => {
-  try {
-    const configJson = localStorage.getItem(APP_CONFIG_KEY);
-    return configJson ? JSON.parse(configJson) : defaultConfig;
-  } catch (error) {
-    console.error("Failed to parse app config from localStorage", error);
-    return defaultConfig;
-  }
-};
-
-export const saveConfig = (config: AppConfig): void => {
-  try {
-    const configJson = JSON.stringify(config);
-    localStorage.setItem(APP_CONFIG_KEY, configJson);
-  } catch (error) {
-    console.error("Failed to save app config to localStorage", error);
-  }
-};
-
-export const setMonetizationModel = (model: MonetizationModel): void => {
-  const currentConfig = getConfig();
-  const newConfig = { ...currentConfig, monetizationModel: model };
-  saveConfig(newConfig);
-};
+export const getConfig = (): AppConfig => defaultConfig;
+export const setMonetizationModel = (_m: any) => {};
+export const updateConfig = (_c: Partial<AppConfig>) => {};

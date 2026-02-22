@@ -1,37 +1,18 @@
 
-import { Expense, GrantOpportunity } from '../types';
-import { getToken } from './authService';
+export const getExpenses = (grantId: string) => { try { return JSON.parse(localStorage.getItem('gos_exp_'+grantId) || '[]'); } catch { return []; } };
+export const addExpense = (grantId: string, e: any) => { const list = [...getExpenses(grantId), { id: Date.now(), ...e }]; localStorage.setItem('gos_exp_'+grantId, JSON.stringify(list)); };
 
-const API_URL = 'http://localhost:3001/api';
-
-const getAuthHeaders = () => {
-    const token = getToken();
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-    };
+export const deleteExpense = (grantId: string, id: number) => {
+  const key = 'gos_exp_' + grantId;
+  try {
+    const items = JSON.parse(localStorage.getItem(key) || '[]');
+    localStorage.setItem(key, JSON.stringify(items.filter((e: any) => e.id !== id)));
+  } catch {}
 };
-
-export const getExpenses = async (grantId: string): Promise<Expense[]> => {
-    const response = await fetch(`${API_URL}/grants/${grantId}/expenses`, { headers: getAuthHeaders() });
-    if (!response.ok) throw new Error('Failed to fetch expenses');
-    return response.json();
-};
-
-export const addExpense = async (grantId: string, expenseData: Omit<Expense, 'id' | 'grantId'>): Promise<Expense> => {
-    const response = await fetch(`${API_URL}/grants/${grantId}/expenses`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(expenseData),
-    });
-    if (!response.ok) throw new Error('Failed to add expense');
-    return response.json();
-};
-
-export const deleteExpense = async (grantId: string, expenseId: number): Promise<void> => {
-    const response = await fetch(`${API_URL}/grants/${grantId}/expenses/${expenseId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-    });
-    if (!response.ok) throw new Error('Failed to delete expense');
+export const updateExpense = (grantId: string, id: number, patch: any) => {
+  const key = 'gos_exp_' + grantId;
+  try {
+    const items = JSON.parse(localStorage.getItem(key) || '[]');
+    localStorage.setItem(key, JSON.stringify(items.map((e: any) => e.id === id ? {...e,...patch} : e)));
+  } catch {}
 };

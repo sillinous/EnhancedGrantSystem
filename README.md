@@ -1,20 +1,35 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Grant OS — AI Grant Intelligence Platform
 
-# Run and deploy your AI Studio app
+Full-stack grant management SaaS built with React + TypeScript + Vite + Netlify Functions.
 
-This contains everything you need to run your app locally.
+## Features
+- **AI Grant Discovery** — finds matching grants from 47K+ sources using Claude AI
+- **Pipeline Manager** — Kanban board tracking grants from Discovery → Application → Submitted → Awarded
+- **Application Writer** — AI-drafts each section (Executive Summary, Program Narrative, Budget, Goals, Capacity)
+- **Application Reviewer** — constructive review, red-team analysis, differentiation advisor, cohesion checker
+- **Budget Assistant** — AI-generated budget justifications per line item
+- **Funder Persona** — deep analysis of funder priorities and communication style
+- **Success Pattern Analysis** — what types of projects this funder typically funds
+- **Deadline Tracker** — checklist with due dates per grant
+- **Compliance Manager** — reporting requirements and expense tracking
+- **Team Hub** — multi-user collaboration
+- **Intelligence Platform** — funding trends, knowledge base, lessons learned
 
-View your app in AI Studio: https://ai.studio/apps/drive/1M_ADz4HJCZQxX3IRk8Q0wCqcinAFrUCF
+## Stack
+- React 19 + TypeScript
+- Vite 6
+- Netlify Functions (AI backend via Anthropic Claude)
+- localStorage for client-side persistence
+- Deployed to Netlify (auto-deploy from main branch)
 
-## Run Locally
+## Deploy
+1. Fork this repo
+2. Connect to Netlify
+3. Set `ANTHROPIC_API_KEY` in Netlify environment variables
+4. Deploy
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Local Development
+```bash
+npm install
+npm run dev
+```

@@ -1,33 +1,29 @@
-import React, { createContext, useState, useCallback, ReactNode } from 'react';
-import { ToastMessage } from '../types';
+import React, { createContext, useContext, useState } from 'react';
 
-interface ToastContextType {
-  toasts: ToastMessage[];
-  showToast: (message: string, type: ToastMessage['type']) => void;
-  removeToast: (id: number) => void;
-}
+interface Toast { id: number; message: string; type: 'success' | 'error' | 'info' }
+interface ToastContextType { showToast: (message: string, type?: Toast['type']) => void }
 
-export const ToastContext = createContext<ToastContextType | undefined>(undefined);
+export const ToastContext = createContext<ToastContextType>({ showToast: () => {} });
 
-export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
-  const removeToast = useCallback((id: number) => {
-    setToasts(prevToasts => prevToasts.filter(toast => toast.id !== id));
-  }, []);
-
-  const showToast = useCallback((message: string, type: ToastMessage['type']) => {
-    const id = Date.now() + Math.random();
-    setToasts(prevToasts => [...prevToasts, { id, message, type }]);
-    const timer = setTimeout(() => {
-      removeToast(id);
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [removeToast]);
-
+export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const showToast = (message: string, type: Toast['type'] = 'success') => {
+    const id = Date.now();
+    setToasts(t => [...t, { id, message, type }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 4000);
+  };
   return (
-    <ToastContext.Provider value={{ toasts, showToast, removeToast }}>
+    <ToastContext.Provider value={{ showToast }}>
       {children}
+      <div style={{ position:'fixed', bottom:20, right:20, zIndex:9999, display:'flex', flexDirection:'column', gap:8 }}>
+        {toasts.map(t => (
+          <div key={t.id} style={{ background: t.type==='error'?'#ef4444':'#10b981', color:'#fff', padding:'10px 16px', borderRadius:6, fontSize:13, fontWeight:500, boxShadow:'0 4px 16px rgba(0,0,0,0.3)' }}>
+            {t.message}
+          </div>
+        ))}
+      </div>
     </ToastContext.Provider>
   );
 };
+
+export const useToast = () => useContext(ToastContext);
